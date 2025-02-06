@@ -39,6 +39,16 @@
 #define CREATE_TRACE_POINTS
 #include <trace/events/oom.h>
 
+#define MOBIS_OOM_FILE_SAVE
+#ifdef MOBIS_OOM_FILE_SAVE
+#include <linux/printk.h>
+#include <linux/syscalls.h>
+#include <linux/delay.h>
+#include <linux/spinlock.h>
+static DEFINE_MUTEX(mobis_oom_lock);
+#endif // MOBIS_OOM_FILE_SAVE
+
+
 int sysctl_panic_on_oom;
 int sysctl_oom_kill_allocating_task;
 int sysctl_oom_dump_tasks = 1;
@@ -421,6 +431,51 @@ void note_oom_kill(void)
 	atomic_inc(&oom_kills);
 }
 
+#ifdef MOBIS_OOM_FILE_SAVE
+#define K_TMOS_OOM_FILENAME_FLAG "/storage/log/TMOS/bsp/AVNT.RESOURCE.OUTOFMEMORY.flag"
+#define LOG_CONFIG_FILE "/storage/log/log_config"
+static void oom_create_flag_file(void)
+{
+	mm_segment_t fs;
+	char buffer[16];
+	int ofd = 0, nfd = 0;
+	ssize_t nread = 0;
+
+	fs = get_fs();
+	set_fs(KERNEL_DS);
+
+	memset(buffer, 0x00, 16);
+	if(sys_access(K_TMOS_OOM_FILENAME_FLAG, 0) == 0)
+	{
+		pr_err("file exist %s\n", K_TMOS_OOM_FILENAME_FLAG);
+		set_fs(fs);
+		return;
+	}
+	if((ofd = sys_open(LOG_CONFIG_FILE, O_RDONLY, 0)) == -1) {
+		pr_err("Cannot open %s\n", LOG_CONFIG_FILE);
+		set_fs(fs);
+		return;
+	}
+	if((nfd = sys_open(K_TMOS_OOM_FILENAME_FLAG, O_WRONLY|O_CREAT |O_DIRECT, 0644)) == -1) {
+		pr_err("Cannot create %s\n", K_TMOS_OOM_FILENAME_FLAG);
+		sys_close(ofd);
+		set_fs(fs);
+		return;
+	}
+	while((nread = sys_read(ofd, buffer, 16)) > 0) {
+		sys_write(nfd, buffer, nread);
+	}
+	sys_fsync(nfd);
+	sys_close(ofd);
+	sys_close(nfd);
+	sys_sync();
+	sys_sync();
+	set_fs(fs);
+	return;
+}
+
+#endif // MOBIS_OOM_FILE_SAVE
+
 #define K(x) ((x) << (PAGE_SHIFT-10))
 /*
  * Must be called while holding a reference to p, which will be released upon
@@ -448,6 +503,12 @@ void oom_kill_process(struct task_struct *p, gfp_t gfp_mask, int order,
 		put_task_struct(p);
 		return;
 	}
+
+#ifdef MOBIS_OOM_FILE_SAVE
+	mutex_lock(&mobis_oom_lock);
+	oom_create_flag_file();
+	mutex_unlock(&mobis_oom_lock);
+#endif //MOBIS_OOM_FILE_SAVE
 
 	if (__ratelimit(&oom_rs))
 		dump_header(p, gfp_mask, order, memcg, nodemask);
@@ -530,6 +591,13 @@ void oom_kill_process(struct task_struct *p, gfp_t gfp_mask, int order,
 	set_tsk_thread_flag(victim, TIF_MEMDIE);
 	do_send_sig_info(SIGKILL, SEND_SIG_FORCED, victim, true);
 	put_task_struct(victim);
+
+#ifdef MOBIS_OOM_FILE_SAVE
+	msleep(100);
+	mutex_lock(&mobis_oom_lock);
+	oom_create_flag_file();
+	mutex_unlock(&mobis_oom_lock);
+#endif //MOBIS_OOM_FILE_SAVE
 }
 #undef K
 

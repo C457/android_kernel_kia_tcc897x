@@ -1,5 +1,5 @@
-#ifndef _ATMEL_MXT336S_PARSE_H_
-#define _ATMEL_MXT336S_PARSE_H_
+#ifndef ATMEL_MXT336S_PARSE_H_
+#define ATMEL_MXT336S_PARSE_H_
 
 #include <linux/types.h>
 #include <linux/device.h>

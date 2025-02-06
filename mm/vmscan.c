@@ -58,6 +58,10 @@
 #define CREATE_TRACE_POINTS
 #include <trace/events/vmscan.h>
 
+#ifdef CONFIG_SHRINK_MEMORY
+#include <linux/suspend.h>
+#endif
+
 struct scan_control {
 	/* How many pages shrink_list() should reclaim */
 	unsigned long nr_to_reclaim;
@@ -3402,7 +3406,7 @@ void wakeup_kswapd(struct zone *zone, int order, enum zone_type classzone_idx)
 	wake_up_interruptible(&pgdat->kswapd_wait);
 }
 
-#ifdef CONFIG_HIBERNATION
+#if defined CONFIG_HIBERNATION || CONFIG_SHRINK_MEMORY
 /*
  * Try to free `nr_to_reclaim' of memory, system-wide, and return the number of
  * freed pages.
@@ -3421,11 +3425,19 @@ unsigned long shrink_all_memory(unsigned long nr_to_reclaim)
 		.may_writepage = 1,
 		.may_unmap = 1,
 		.may_swap = 1,
-		.hibernation_mode = 1,
 	};
 	struct zonelist *zonelist = node_zonelist(numa_node_id(), sc.gfp_mask);
 	struct task_struct *p = current;
 	unsigned long nr_reclaimed;
+
+#ifdef CONFIG_SHRINK_MEMORY
+	if (system_entering_hibernation())
+		sc.hibernation_mode = 1;
+	else
+		sc.hibernation_mode = 0;
+#else
+		sc.hibernation_mode = 1;
+#endif
 
 	p->flags |= PF_MEMALLOC;
 	lockdep_set_current_reclaim_state(sc.gfp_mask);
@@ -3441,6 +3453,28 @@ unsigned long shrink_all_memory(unsigned long nr_to_reclaim)
 	return nr_reclaimed;
 }
 #endif /* CONFIG_HIBERNATION */
+
+#ifdef CONFIG_SHRINK_MEMORY
+int sysctl_shrink_memory;
+/* This is the entry point for system-wide shrink memory
+via /proc/sys/vm/shrink_memory */
+int sysctl_shrinkmem_handler(struct ctl_table *table, int write,
+		void __user *buffer, size_t *length, loff_t *ppos)
+{
+	int ret;
+
+	ret = proc_dointvec_minmax(table, write, buffer, length, ppos);
+	if (ret)
+		return ret;
+
+	if (write) {
+		if (sysctl_shrink_memory & 1)
+			shrink_all_memory(totalram_pages);
+	}
+
+	return 0;
+}
+#endif
 
 /* It's optimal to keep kswapds on the same CPUs as their memory, but
    not required for correctness.  So if the last cpu in a node goes

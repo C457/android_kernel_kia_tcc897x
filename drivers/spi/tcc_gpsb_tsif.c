@@ -241,7 +241,7 @@ static ssize_t show_packet(struct device *dev,struct device_attribute *attr, cha
     return sprintf(buf, "gpsb[0] packet size : %d \n"
         "gpsb[0] read packet count : %d \n"
         "gpsb[0] read byte : %d \n"
-	#if defined(CONFIG_ISDB)
+	#if defined(INCLUDE_ISDB)
 	"gpsb[1] packet size : %d\n"
 	"gpsb[1] packet count : %d\n"
 	"gpsb[1] read byte : %d\n"
@@ -249,7 +249,7 @@ static ssize_t show_packet(struct device *dev,struct device_attribute *attr, cha
         ,tsif_pri[0].packet_size
         ,tsif_pri[0].packet_read_count
         ,tsif_pri[0].read_byte
-	#if defined(CONFIG_ISDB)
+	#if defined(INCLUDE_ISDB)
 	,tsif_pri[1].packet_size
 	,tsif_pri[1].packet_read_count
 	,tsif_pri[1].read_byte

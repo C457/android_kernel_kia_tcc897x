@@ -3090,11 +3090,14 @@ void show_regs_print_info(const char *log_lvl)
  */
 int log_buf_copy(char *dest)
 {
-	int max;
+	unsigned int max = 0;
 	bool took_lock = false;
-	int i = 0, idx = 0;
+	unsigned int i = 0, idx = 0;
 	struct printk_log *msg;
-	int buf_len = 0;
+	unsigned int buf_len = 0;
+
+	unsigned int cur_idx = 0;
+	unsigned int text_len = 0;
 
 	if (!oops_in_progress) {
 		raw_spin_lock_irq(&logbuf_lock);
@@ -3103,19 +3106,43 @@ int log_buf_copy(char *dest)
 
 	max = log_buf_len_get();
 
+	// start offset of log buffer
+	cur_idx = log_first_idx; 
+	idx = cur_idx;
+
 	while (true)
 	{
 		msg = log_from_idx(idx);
 
-        buf_len += print_time(msg->ts_nsec, dest + buf_len);
+		text_len += msg->len;
 
-		for (i = 0; i < msg->text_len; i++)
+		// check the end of log buffer (start offset != 0)
+		if(text_len > max) {
+			dest[buf_len++] = '\0';
+			break;
+		}
+
+		buf_len += print_time(msg->ts_nsec, dest + buf_len);
+
+		for (i = 0; i < msg->text_len; i++) {
 			dest[buf_len++] = log_text(msg)[i];
+		}
 		dest[buf_len++] = '\n';
 
 		idx = log_next_kpanic(idx);
-		if(!log_next_kpanic(idx))
-			break;
+
+		// check the end of log buffer (start offset == 0)
+		if(!cur_idx) {	
+			if(!log_next_kpanic(idx)) {
+				dest[buf_len++] = '\0';
+				break;
+			}
+		}
+	}
+
+	// very unlikely happen... (in case of text_len < buf_len)
+	if(buf_len > max) {
+		buf_len = max;
 	}
 
 	if (took_lock)

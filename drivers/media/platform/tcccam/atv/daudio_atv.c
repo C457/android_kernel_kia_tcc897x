@@ -16,7 +16,7 @@
 #include "../tcc_cam_i2c.h"
 #include "../tcc_cam.h"
 
-#if defined(CONFIG_BOARD3HW_GPIO)
+#if defined(INCLUDE_BOARD3HW_GPIO)
 #include "tw9990.h"
 #include "daudio_lvds.h"
 #include "daudio_atv.h"
@@ -97,13 +97,17 @@ static int sensor_open(struct tcc_camera_device * vdev, bool bChangeCamera)
 		yin=TW_YIN0;
 	}
 
-	if (what == SENSOR_TW9990)
+	if(what == SENSOR_TW9990)
 		yin_sel = yin;
 
-	if (sf_daudio[what].sensor_open != NULL)
-		return sf_daudio[what].sensor_open(yin,vdev);
-	else
+	if(sf_daudio[what].sensor_open == NULL)
 		return FAIL;
+
+	if(sf_daudio[what].sensor_open(yin,vdev)) {
+		printk("sensor_open fail\n");
+	}
+
+	return 0;
 }
 
 static int sensor_close(struct tcc_camera_device * vdev)
@@ -497,7 +501,7 @@ int datv_init(struct tcc_camera_device * vdev)
 
 	VPRINTK("%s\n", __func__);
 
-#if defined(CONFIG_BOARD3HW_GPIO)
+#if defined(INCLUDE_BOARD3HW_GPIO)
 	if (vdev->data.cam_info == DAUDIO_CAMERA_LVDS || vdev->data.cam_info == DAUDIO_ADAS_PRK || vdev->data.cam_info == DAUDIO_DVRS_RVM)
 	{
 		lvds_sensor_init_fnc(&sf_daudio[SENSOR_LVDS]);

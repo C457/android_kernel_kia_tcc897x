@@ -11,8 +11,8 @@
   Y Pitch  :
 ***********************************************************/
 
-#ifndef __MXT336S_CONFIG__
-#define __MXT336S_CONFIG__
+#ifndef MXT336S_CONFIG__
+#define MXT336S_CONFIG__
 
 #define TOUCH_TYPE_MAX 12
 #define TOUCH_TYPE_7_IN 0

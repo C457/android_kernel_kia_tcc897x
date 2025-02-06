@@ -9,11 +9,11 @@
  * version 2 as published by the Free Software Foundation.
  */
 
-#ifndef __SIW_TOUCH_BUS_SPI_H
-#define __SIW_TOUCH_BUS_SPI_H
+#ifndef SIW_TOUCH_BUS_SPI_H
+#define SIW_TOUCH_BUS_SPI_H
 
 extern int siw_touch_spi_add_driver(void *data);
 extern int siw_touch_spi_del_driver(void *data);
 
-#endif	/* __SIW_TOUCH_BUS_SPI_H */
+#endif	/* SIW_TOUCH_BUS_SPI_H */
 

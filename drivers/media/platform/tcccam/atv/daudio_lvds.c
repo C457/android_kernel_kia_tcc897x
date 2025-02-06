@@ -54,6 +54,8 @@ static int _dvrs_contrast = 127;
 static int _dvrs_gamma = -1;
 static int _dvrs_saturation = 127;
 
+static DEFINE_MUTEX(sensor_lock);
+
 static int debug_lvds	= DEBUG_DAUDIO_LVDS;
 
 #define VPRINTK(fmt, args...) if (1) printk(KERN_INFO TAG_DAUDIO_LVDS fmt, ##args)
@@ -111,21 +113,20 @@ static int sensor_readRegister(int reg, struct tcc_camera_device * vdev)
 	return ret;
 }
 
-static unsigned int lvds_read(unsigned short reg, struct tcc_camera_device * vdev)
+static unsigned int lvds_read(unsigned short reg, unsigned char *data, struct tcc_camera_device * vdev)
 {
 	int i = I2C_RETRY_COUNT;
-	unsigned char ret;
 	int loop  ;
 	int retval; 
 
 	//getChipAddress();
 
 	do {
-		retval = DDI_I2C_Read(reg , 1, &ret, 1,vdev );
+		retval = DDI_I2C_Read(reg , 1, data, 1,vdev );
 		if (retval == 0 )
 		{
 			//success to I2C.
-			return ret;
+			return 0;
 		}
 		i--;
 	} while(i > 0);
@@ -170,45 +171,73 @@ static unsigned int sensor_enable_signal_error_monitoring(unsigned int enable, s
 static unsigned int sensor_signal_error_monitoring(struct tcc_camera_device * vdev)
 {
 	unsigned int error_det = false;
+	unsigned char data = 0;
+	unsigned int ret = 0;
 
 	//	VPRINTK("%s++\n", __func__);
+	mutex_lock(&sensor_lock);
+	ret = lvds_read(REG_det_err, &data, vdev);
+	if(ret == FAIL_I2C) {
+		vdev->cam_err.des_ic_err = 1;
+		//printk("%s: I2C error occur\n", __func__);
+	}
+	else {
+		vdev->cam_err.des_ic_err = 0;
 
-	if(lvds_read(REG_det_err, vdev) >= NUM_ERR_THR)
-	{
-		printk("%s More than %d errors were detected!\n", __func__, NUM_ERR_THR);
-		error_det = true;
+		if(data >= NUM_ERR_THR)
+		{
+			//printk("cam_info: SERDES signal error\n");
+			vdev->cam_err.des_signal_err = 1;
+		}
+		else if(vdev->cam_err.des_signal_err) {
+			//printk("cam_info: SERDES signal normal\n");
+			vdev->cam_err.des_signal_err = 0;
+		}
 	}
 
 	//	VPRINTK("%s--\n", __func__);
+	mutex_unlock(&sensor_lock);
 
-	return error_det;
+	return ret;
 }
 
 static int lvds_sensor_open(eTW_YSEL yin, struct tcc_camera_device * vdev)
 {
 
-	unsigned int id =0 ; 
+	unsigned char id =0 ; 
 	unsigned int status =0;
 	unsigned char val[2];
+	unsigned int ret = 0;
 
-	id	= lvds_read(LVDS_REG_ID, vdev);
-	VPRINTK("%s, LVDS_REG_ID = 0x%x\n", __func__, id);
+	mutex_lock(&sensor_lock);
+	ret	= lvds_read(LVDS_REG_ID, &id, vdev);
+	VPRINTK("%s, LVDS_REG_ID = 0x%x(%u)\n", __func__, id, ret);
+
+	if(FAIL_I2C == ret) {
+		//printk("%s: I2C error occur\n", __func__);	
+	}
 
 	if( id == LVDS_VAL_ID )
 	{
+		vdev->cam_err.des_ic_err = 0;
 		val[0]	= 0x04; //main_config
-		val[1]	= lvds_read(val[0], vdev);
+		lvds_read(val[0], &val[1], vdev);
 		VPRINTK("%s, OLD LVDS_REG_DESLOCK = 0x%x \n", __func__, val[1]);
 
 		val[1]	|= (unsigned char)0x03;
 		lvds_write(val, 1, 1, vdev);
 				
-		val[1]	= lvds_read(val[0], vdev);
+		lvds_read(val[0], &val[1], vdev);
 		VPRINTK("%s, NEW LVDS_REG_DESLOCK = 0x%x \n", __func__, val[1]);
 
 		lvds_write_ie(0,0,0);
 	}
-	return 0;
+	else {
+		vdev->cam_err.des_ic_err = 1;
+	}
+	mutex_unlock(&sensor_lock);
+
+	return ret;
 
 }
 
@@ -221,11 +250,18 @@ static int lvds_sensor_close(void)
 int lvds_read_id(struct tcc_camera_device * vdev)
 {
  	unsigned int id =0 ; 
-	unsigned int status =0;
+	unsigned int ret =0;
 
+	mutex_lock(&sensor_lock);
 	//VPRINTK("%s-----------------------------------------------\n", __func__);
-	id	= lvds_read(LVDS_REG_ID, vdev);
+	ret	= lvds_read(LVDS_REG_ID, &id, vdev);
 	VPRINTK("%s, LVDS_REG_ID = %d\n", __func__, id	);
+
+	if(ret == FAIL_I2C) {
+		//printk("%s: I2C error occur\n", __func__);
+	}
+
+	mutex_unlock(&sensor_lock);
 
 	return id;
 }
@@ -248,23 +284,27 @@ void lvds_close_cam(struct tcc_camera_device * vdev)
 	unsigned int id =0 ; 
 	unsigned int status =0;
 	unsigned char val[2];
+	unsigned int ret = 0;
 
-	id	= lvds_read(LVDS_REG_ID, vdev);
+	mutex_lock(&sensor_lock);
+	lvds_read(LVDS_REG_ID, &id, vdev);
 	VPRINTK("%s, LVDS_REG_ID = 0x%x\n", __func__, id);
 
 	if( id == LVDS_VAL_ID )
 	{
 		val[0]	= 0x04; //main_config
-		val[1]	= lvds_read(val[0], vdev);
+		lvds_read(val[0], &val[1], vdev);
 		VPRINTK("%s, OLD LVDS_REG_DESLOCK = 0x%x \n", __func__, val[1]);
 
 		val[1]	&= (unsigned char)(~0x03);
 		lvds_write(val, 1, 1, vdev);
 				
-		val[1]	= lvds_read(val[0], vdev);
+		lvds_read(val[0], &val[1], vdev);
 		VPRINTK("%s, NEW LVDS_REG_DESLOCK = 0x%x \n", __func__, val[1]);
 	}
-	return 0;
+
+	mutex_unlock(&sensor_lock);
+	return;
 }
 
 int lvds_init(void)
@@ -276,12 +316,33 @@ int lvds_init(void)
 
 int lvds_check_video_signal(struct tcc_camera_device * vdev)
 {
-	int status = 0;
+	int status = SERDES_LOCK_NORMAL;
+	unsigned int i2c_ret = 0;
+	unsigned int id = 0;
 
-	status  = gpio_get_value(TCC_GPB(17));
+	mutex_lock(&sensor_lock);
 
-	if(!status)
-		VPRINTK("%s, LVDS_DESLOCK(gpiob17) = %d \n", __func__,  status);
+	i2c_ret = lvds_read(LVDS_REG_ID, &id, vdev);
+	if(id != LVDS_VAL_ID) {
+		vdev->cam_err.des_ic_err = 1;
+
+		status = SERDES_I2C_FAIL;
+		VPRINTK("check lock = DES IC error\n");
+	}
+	else {
+		vdev->cam_err.des_ic_err = 0;
+
+		status  = gpio_get_value(TCC_GPB(17));
+		if(status == SERDES_LOCK_FAIL) {
+			vdev->cam_err.des_lock_fail = 1;
+			VPRINTK("check lock = lock error\n");
+		}
+		else {
+			vdev->cam_err.des_lock_fail = 0;
+		}
+	}
+
+	mutex_unlock(&sensor_lock);
 	
 	return status;
 }
@@ -342,7 +403,7 @@ static int setLUT(int brightness, int contrast, int saturation)
 						__func__, brightness, contrast, saturation);
 
 //	VIOC_VIN_SetLUT_by_table(pVIN, rgb);
-    	tccxxx_cif_vin_lut_buffer_update(0, rgb);
+	tccxxx_cif_vin_lut_buffer_update(0, rgb);
 
 
 	return 0;
@@ -517,29 +578,33 @@ static int sensor_hue(int val,struct tcc_camera_device * vdev)
 
 static int sensor_getVideo( struct tcc_camera_device * vdev)
 {
-		char ret;
+	char ret;
 
+	mutex_lock(&sensor_lock);
 	DDI_I2C_Read(LVDS_REG_RESET , 1, &ret, 1,vdev);
 	if ((ret & 0x80) == 0x00)  {
 		ret = 0; // detected video signal
 	} else {
 		ret = 1; // not detected video signal
 	}
-	
+	mutex_unlock(&sensor_lock);
+
 	return ret;
 }
 
 static int sensor_checkNoise( struct tcc_camera_device * vdev)
 {
-		char ret;
+	char ret;
 
+	mutex_lock(&sensor_lock);
 	DDI_I2C_Read(LVDS_REG_RESET , 1, &ret, 1,vdev);
 	if ((ret & 0xE8) == 0x68)  {
 		ret = 0; // not detected video noise
 	} else {
 		ret = 1; // detected video noise
 	}
-	
+
+	mutex_unlock(&sensor_lock);
 	return ret;
 }
 static int lvds_sensor_setPath(int val,struct tcc_camera_device * vdev)

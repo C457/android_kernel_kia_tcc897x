@@ -62,7 +62,7 @@ static int debug_pinctl = DEBUG_DAUDIO_PINCTL;
 static int gpio_list_size = 0;
 
 #if 0	//5b42c46e8a0f13f5b7c1036de9856747fe36943d
-#if defined(CONFIG_TDMB)
+#if defined(INCLUDE_TDMB)
 static int ext_irq_noti_1 = 0;  //spidev1.0
 #endif
 #endif
@@ -138,7 +138,7 @@ static D_AUDIO_GPIO_LIST gpio_list[] = {
 	{CTL_TW9990_RESET,          TCC_GPG(16),    "CTL_TW9990_RESET"},
 
 	{CTL_GPS_BOOT_MODE,		TCC_GPA(0),	"CTL_GPS_BOOT_MODE - RESERVED"},
-#if defined(CONFIG_TDMB)
+#if defined(INCLUDE_TDMB)
 	{DET_GPS_ANT_SHORT,		TCC_GPA(0),	"DET_GPS(+DMB)_ANT_SHORT - ADC Check"},
 	{DET_GPS_ANT_OPEN,		TCC_GPA(0),	"DET_GPS(+DMB)_ANT_OPEN - ADC Check"},
 #else
@@ -320,7 +320,7 @@ int get_gpio_number(unsigned gpio)
 EXPORT_SYMBOL(get_gpio_number);
 #endif
 
-#if defined(CONFIG_XM)
+#if defined(INCLUDE_XM)
 #define GPIO_UART4_TX TCC_GPF(13)
 #define GPIO_UART4_RX TCC_GPF(14)
 #define GPIO_I2C_SDA	TCC_GPG(6)
@@ -423,7 +423,7 @@ static ssize_t store_ext_spi_int(struct device *dev, struct device_attribute *at
 }
 
 #if 0 //jason.ku 2018.10.30
-#if defined(CONFIG_TDMB)
+#if defined(INCLUDE_TDMB)
 static irqreturn_t ext_irq_handler_1(int irq, void *dev_id)
 {
 	unsigned long flag;
@@ -480,7 +480,7 @@ void clear_irq_variables(void)
 	spin_lock_irqsave(&ext_irq_lock, flag);
 	ext_irq_noti = 0;
 #if 0 //jason.ku 2018.10.30
-#if defined(CONFIG_TDMB)
+#if defined(INCLUDE_TDMB)
 	ext_irq_noti_1 = 0;
 #endif
 #endif	// #if 0 //jason.ku 2018.10.30
@@ -501,13 +501,13 @@ static int daudio_pinctl_set_gpio(int gpio, int value)
 			return ret;
 		}
 		if (get_gpio_output_enable(gpio)) {
-#if defined(CONFIG_XM)
+#if defined(INCLUDE_XM)
 			if ((gpio == TCC_GPA(3)) && ((value == 0) || (value == 1)))
 				sabre_i2c_pinctl(value);
 
 			if ((gpio == TCC_GPB(10)) && (value == 0))
 				daudio_uart_pinctl(0);
-#elif defined(CONFIG_DAB)
+#elif defined(INCLUDE_DAB)
 #if 0
 			if ((gpio == TCC_GPC(22)) && (value == 1)) {
 				tcc_gpio_config(TCC_GPD(22), GPIO_FN0);
@@ -524,7 +524,7 @@ static int daudio_pinctl_set_gpio(int gpio, int value)
 #endif
 #endif
 			gpio_set_value(gpio, value);
-#if defined(CONFIG_XM)
+#if defined(INCLUDE_XM)
 			if ((gpio == TCC_GPB(10)) && (value == 1))
 				daudio_uart_pinctl(1);
 #endif
@@ -802,7 +802,7 @@ static int daudio_pinctl_enable_interrupt(unsigned int gpio, unsigned int extint
 
 	clear_irq_variables();
 #if 0 //jason.ku 2018.10.30
-#if defined(CONFIG_TDMB)
+#if defined(INCLUDE_TDMB)
 	if (gpio == TCC_GPC(15)) {
 		ret = request_irq(extint, ext_irq_handler_1, int_info.flags, int_info.label, NULL);
 		if(ret < 0) {
@@ -984,7 +984,7 @@ static long daudio_pinctl_ioctl(struct file *file, unsigned int cmd, unsigned lo
 				printk(KERN_INFO "%s DAUDIO_PINCTL_CTL pin:%d value:%d\n",
 					   __func__, gpio_number, data->pin_value);
 #endif
-#if defined(CONFIG_DAB)
+#if defined(INCLUDE_DAB)
 				if((daudio_pinctl_get_gpio(TCC_GPB(3)) == 1) && (data->pin_name == 233)) 	//jason.ku 2018.10.23
 					clear_irq_variables();
 				else
@@ -1011,7 +1011,7 @@ static long daudio_pinctl_ioctl(struct file *file, unsigned int cmd, unsigned lo
 					data->pin_value = get_seperated_mon();
 				else
 #endif
-#if defined(CONFIG_DAB)
+#if defined(INCLUDE_DAB)
 				{
 					if((daudio_pinctl_get_gpio(TCC_GPB(3)) == 1) && (data->pin_name == 233)) {	// jason.ku 2018.10.23
 						if(ext_irq_noti) {
@@ -1151,7 +1151,7 @@ static int __init daudio_pinctl_init(void)
 		// value 1 represents "receive an interrupt signal from CMMB module"
 		device_create_file(dev, &dev_attr_ext_spi_int);
 #if 0 //jason.ku 2018.10.30
-#if defined(CONFIG_TDMB)
+#if defined(INCLUDE_TDMB)
 		device_create_file(dev, &dev_attr_ext_spi_int_1);
 #endif
 #endif	//#if 0 //jason.ku 2018.10.30

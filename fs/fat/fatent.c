@@ -596,7 +596,7 @@ int fat_free_clusters(struct inode *inode, int cluster)
 			err = cluster;
 			goto error;
 		} else if (cluster == FAT_ENT_FREE) {
-			fat_fs_error(sb, "%s: deleting FAT entry beyond EOF",
+			fat_fs_error_ratelimit(sb, "%s: deleting FAT entry beyond EOF",
 				     __func__);
 			err = -EIO;
 			goto error;

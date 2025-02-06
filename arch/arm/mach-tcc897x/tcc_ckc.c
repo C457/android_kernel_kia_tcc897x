@@ -1840,6 +1840,7 @@ static int tcc_ckc_pmu_pwdn(int id, bool pwdn)
 	case FBUS_CMBUS:
 		ckcrst_mask = 1<<11;
 		pwrsts_reg = pmu_base + PMU_PWRSTS1;
+/* Patch for unintended value write on the OTPROM
 		if (pwdn) {
 			pwrsts_mask = 1<<1;
 			pwrupdn_reg = pmu_base + PMU_PWRDN_CMBUS;
@@ -1848,6 +1849,7 @@ static int tcc_ckc_pmu_pwdn(int id, bool pwdn)
 			pwrsts_mask = 1<<0;
 			pwrupdn_reg = pmu_base + PMU_PWRUP_CMBUS;
 		}
+*/
 		memhclk_mask = 1<<28;
 		memrst_mask = 1<<3;
 		memsts_reg = NULL;
@@ -1895,6 +1897,7 @@ static int tcc_ckc_pmu_pwdn(int id, bool pwdn)
 			while((ckc_readl(pwrsts1_reg)&pwrsts1_mask) == 0);
 		}
 #if !defined(CONFIG_TCC_CODESONAR_BLOCKED)
+		if (pwrupdn_reg)
 #else
 		if (pwrupdn_reg)
 #endif
@@ -1905,6 +1908,7 @@ static int tcc_ckc_pmu_pwdn(int id, bool pwdn)
 	}
 	else {
 #if !defined(CONFIG_TCC_CODESONAR_BLOCKED)
+		if (pwrupdn_reg)
 #else
 		if (pwrupdn_reg)
 #endif

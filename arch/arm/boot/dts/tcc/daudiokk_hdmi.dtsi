@@ -1,12 +1,4 @@
-/*
- * Copyright (C) 2015 Telechips - http://www.telechips.com/
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 as
- * published by the Free Software Foundation.
- */
 
-/ {
         fbdisplay: fbdisplay@72000000 {
                 telechips,fbdisplay_num = <0>;
                 status ="okay";
@@ -25,7 +17,6 @@ panel_1920x720 {
 	compatible = "telechips,hdmi1920x720";
 	clocks = <&clk_peri PERI_LCD0>, <&clk_peri PERI_LCD1>, <&clk_peri PERI_HDMI>, <&clk_ddi DDIBUS_HDMI>, <&clk_isoip_top ISOIP_TOP_HDMI>, <&clk_peri PERI_HDMI_PCLK>;
 	clock-names = "lcdc0-clk", "lcdc1-clk", "hdmi-lclk", "hdmi-hclk", "hdmi-phy", "hdmi-pclk";
-	};
 };
 
 

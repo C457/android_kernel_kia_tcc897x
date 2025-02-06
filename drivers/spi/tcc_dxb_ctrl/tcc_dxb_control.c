@@ -638,7 +638,7 @@ static int tcc_dxb_ctrl_probe(struct platform_device *pdev)
 	gDxbCtrl->gpio_dxb_0_pwdn, gDxbCtrl->gpio_dxb_0_rst, gDxbCtrl->gpio_dxb_0_irq, gDxbCtrl->gpio_dxb_0_sdo,
 	gDxbCtrl->gpio_dxb_1_pwdn, gDxbCtrl->gpio_dxb_1_rst, gDxbCtrl->gpio_dxb_1_irq, gDxbCtrl->gpio_dxb_1_sdo,
 	gDxbCtrl->gpio_ant_pwr, gDxbCtrl->gpio_check_ant_overload);
-	#if defined(CONFIG_ISDB)
+	#if defined(INCLUDE_ISDB)
 	printk("\x1b[1;33m ## [%s:ISDB!!!!] ##\x1b[0m\n", __func__); 
 	gDxbCtrl->board_type = BOARD_ISDBT_TCC353X;
 	#else

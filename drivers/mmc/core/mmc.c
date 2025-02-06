@@ -550,7 +550,12 @@ static int mmc_read_ext_csd(struct mmc_card *card, u8 *ext_csd)
 		/* check whether the eMMC card supports BKOPS */
 		if (ext_csd[EXT_CSD_BKOPS_SUPPORT] & 0x1) {
 			card->ext_csd.bkops = 1;
+#ifdef CONFIG_DAUDIO_KK
+			card->ext_csd.bkops_en = 0;
+			pr_info("%s: BKOPS_EN bit is force disable\n", mmc_hostname(card->host));
+#else
 			card->ext_csd.bkops_en = ext_csd[EXT_CSD_BKOPS_EN];
+#endif
 			card->ext_csd.raw_bkops_status =
 				ext_csd[EXT_CSD_BKOPS_STATUS];
 			if (!card->ext_csd.bkops_en)

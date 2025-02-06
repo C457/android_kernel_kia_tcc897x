@@ -156,6 +156,9 @@ extern int __mmc_switch(struct mmc_card *, u8, u8, u8, unsigned int, bool,
 extern int mmc_switch(struct mmc_card *, u8, u8, u8, unsigned int);
 extern int mmc_send_ext_csd(struct mmc_card *card, u8 *ext_csd);
 
+#ifdef CONFIG_DAUDIO_KK
+extern int mmc_send_gen56_data(struct mmc_card *card, u8 *gen_buffer);
+#endif
 #define MMC_ERASE_ARG		0x00000000
 #define MMC_SECURE_ERASE_ARG	0x80000000
 #define MMC_TRIM_ARG		0x00000001

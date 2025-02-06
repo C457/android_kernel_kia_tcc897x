@@ -174,7 +174,7 @@ void siw_touch_irq_control(struct device *dev, int on_off)
 	siw_touch_disable_irq(dev, ts->irq);
 }
 
-#if defined(__SIW_CONFIG_OF)
+#if defined(SIW_CONFIG_OF)
 static void siw_touch_irq_work_func(struct work_struct *work)
 {
 	struct siw_ts *ts =
@@ -207,7 +207,7 @@ static int siw_touch_request_irq_queue_work(struct siw_ts *ts,
 							    unsigned long flags,
 							    const char *name)
 {
-#if defined(__SIW_CONFIG_OF)
+#if defined(SIW_CONFIG_OF)
 	struct device *dev = ts->dev;
 	struct device_node *node = NULL;
 	u32 ints[2] = { 0, 0 };

@@ -1186,6 +1186,20 @@ static int tcc_serial_remove(struct platform_device *dev)
 }
 
 /* UART power management code */
+#define SERIAL_IRQ_MAX 6
+static int serial_irq_count = 0;
+static int g_serial_irq = 0;
+struct work_struct serial_irq_work;
+
+static void serial_irq_wq(struct work_struct *work)
+{
+	unsigned long flag;
+	spin_lock_irqsave(&ext_irq_lock, flag);
+	disable_irq(g_serial_irq);
+	g_serial_irq = 0;
+	printk("kernel serial_irq_count max count reached(%d).\n", serial_irq_count);
+	spin_unlock_irqrestore(&ext_irq_lock, flag);	
+}
 
 static irqreturn_t serial_irq_handler(int irq, void *_dev)
 {
@@ -1194,10 +1208,11 @@ static irqreturn_t serial_irq_handler(int irq, void *_dev)
 	struct pinctrl *p;
 
 	spin_lock_irqsave(&ext_irq_lock, flag);
+	serial_irq_count++;
 	
 	if(!gpio_get_value(debug_port))
 	{
-		printk("%s : get_gpio_value_debug LOG_OFF !![%d]\n",__func__, gpio_get_value(debug_port));
+		printk("%s : get_gpio_value_debug LOG_OFF !![%d], count=%d\n",__func__, gpio_get_value(debug_port), serial_irq_count);
 		irq_set_irq_type(irq, IRQF_TRIGGER_RISING);
 		dev->pins->p = pinctrl_get_select(dev, "idle");
 		console_loglevel = minimum_console_loglevel;
@@ -1213,12 +1228,60 @@ static irqreturn_t serial_irq_handler(int irq, void *_dev)
 			printk("%s success activating idle pinctrl state\n",__func__);
 
 		console_loglevel = default_console_loglevel;
-		printk("%s : get_gpio_value_debug LOG_ON !![%d]\n",__func__, gpio_get_value(debug_port));
+		printk("%s : get_gpio_value_debug LOG_ON !![%d], count=%d\n",__func__, gpio_get_value(debug_port), serial_irq_count);
+	}
+
+	spin_unlock_irqrestore(&ext_irq_lock, flag);
+	if (serial_irq_count >= SERIAL_IRQ_MAX)
+	{
+		schedule_work(&serial_irq_work);
 	}
 	
-	spin_unlock_irqrestore(&ext_irq_lock, flag);
-	
 	return IRQ_HANDLED;
+}
+
+
+static int serial_loglevel_set(struct device *dev)
+{
+	struct device_node *np = dev->of_node;
+	int error = 0;
+	int id =0,irq;
+
+	if (np)
+		id = of_alias_get_id(np, "serial");
+
+	printk("==================%s: id = %d\n", __func__, id);
+
+	if(id == CONSOLE_PORT)
+	{
+		debug_port = of_get_named_gpio(np, "debug-gpio", 0);
+
+		if(debug_port < 0)
+			printk("%s : console debug-port parsing error\n",__func__);
+
+		if(gpio_is_valid(debug_port)){
+			gpio_request(debug_port, "debug_port");
+			gpio_direction_input(debug_port);
+		}
+		else
+		{
+			printk("%s : err to get gpios : ret:%x\n", __func__, debug_port);
+			debug_port = -1;
+		}
+
+		if(gpio_get_value(debug_port))
+		{
+
+			dev->pins->p = pinctrl_get_select(dev, "active");
+			console_loglevel = default_console_loglevel;
+		}
+		else
+		{
+			dev->pins->p = pinctrl_get_select(dev, "idle");
+			console_loglevel = minimum_console_loglevel;
+		}
+	}
+	return error;
 }
 
 
@@ -1251,6 +1314,7 @@ static int serial_loglevel_interrupt(struct device *dev)
 		}
 
 		irq = gpio_to_irq(debug_port);
+		g_serial_irq = irq;
 
 		if(gpio_get_value(debug_port))
 		{		
@@ -1719,12 +1783,15 @@ static int tcc_serial_probe(struct platform_device *dev)
 	if(tcc_port->bt_use == 1) goto set_dma;
 #endif
 
+	INIT_WORK(&serial_irq_work, serial_irq_wq);
+#if 0
 	error = serial_loglevel_interrupt(&dev->dev);
-
+#else
+	error = serial_loglevel_set(&dev->dev);
+#endif
 	if (error < 0) {
 		dev_err(port->dev, "serial_loglevel_interrupt failure\n");
 	}
-
 	
 set_dma:
 

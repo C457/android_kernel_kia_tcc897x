@@ -102,7 +102,7 @@ static int mxt_check_section(char *str);
  *		GET_DATA_ERR_EOF,
  *		GET_DATA_ERR_OVERFLOW,
  */
-static int mxt_get_data(char **input_string, char *string, int str_size);
+static int mxt_get_data(char **input_string, char *mxt_string, int str_size);
 
 /* \brief print result
  *
@@ -118,7 +118,7 @@ static void print_result(struct mxt_config_t *pconfig);
  * @return if success return 0, otherwise < 0
  */
 static int parse_object_data(struct device *dev,
-		char *string, struct mxt_config_t *pconfig);
+		char *mxt_string, struct mxt_config_t *pconfig);
 
 /**** internal functions ****/
 
@@ -798,7 +798,7 @@ static void print_result(struct mxt_config_t *pconfig)
 }
 
 static int parse_object_data(struct device *dev,
-		char *string, struct mxt_config_t *pconfig)
+		char *mxt_string, struct mxt_config_t *pconfig)
 {
 	int ret = 0;
 	int value = 0;
@@ -844,12 +844,12 @@ static int parse_object_data(struct device *dev,
 			int offset, value;
 			char c;
 
-			if (mxt_get_data(&string, temp, STRING_SIZE) < 0)
+			if (mxt_get_data(&mxt_string, temp, STRING_SIZE) < 0)
 				break;
 			if (0 == sscanf(temp, "DATA[%d]=%d", &offset, &value))
 				GOTO_ERR(pconfig->obj_info.object_num);
-			if (offset >= MXT_ADR_T38_USER5 &&
-					offset < MXT_ADR_T38_USER25)  {
+			if ((offset >= MXT_ADR_T38_USER5) &&
+					(offset < MXT_ADR_T38_USER25))  {
 				if (0 == sscanf(temp, "DATA[%d]='%c'",
 							&offset, &c))
 					GOTO_ERR(pconfig->obj_info.object_num);
@@ -866,7 +866,7 @@ static int parse_object_data(struct device *dev,
 		print_debug("<POWER CONFIG T7>\n");
 		do {
 #define T7	power_t7
-			if (mxt_get_data(&string, temp, STRING_SIZE) < 0)
+			if (mxt_get_data(&mxt_string, temp, STRING_SIZE) < 0)
 				break;
 			COMP_AND_GET2("IDLEACQINT", T7.idleacqint);
 			COMP_AND_GET2("ACTVACQINT", T7.actvacqint);
@@ -876,7 +876,7 @@ static int parse_object_data(struct device *dev,
 		print_debug("<ACQUISITIONCONFIG_CONFIG T8>\n");
 		do {
 #define T8	acquisition_t8
-			if (mxt_get_data(&string, temp, STRING_SIZE) < 0)
+			if (mxt_get_data(&mxt_string, temp, STRING_SIZE) < 0)
 				break;
 
 			COMP_AND_GET2("CHRGTIME", T8.chrgtime);
@@ -899,7 +899,7 @@ static int parse_object_data(struct device *dev,
 			ts_t9 = &pconfig->config.touchscreen1_t9;
 
 		do {
-			if (mxt_get_data(&string, temp, STRING_SIZE) < 0)
+			if (mxt_get_data(&mxt_string, temp, STRING_SIZE) < 0)
 				break;
 
 			COMP_AND_GET3("CTRL", ts_t9->ctrl);
@@ -945,7 +945,7 @@ static int parse_object_data(struct device *dev,
 			tk_t15 = &pconfig->config.keyarray1_t15;
 
 		do {
-			if (mxt_get_data(&string, temp, STRING_SIZE) < 0)
+			if (mxt_get_data(&mxt_string, temp, STRING_SIZE) < 0)
 				break;
 
 			COMP_AND_GET3("CTRL", tk_t15->ctrl);
@@ -964,7 +964,7 @@ static int parse_object_data(struct device *dev,
 		print_debug("SPT_COMMSCONFIG_T18_INSTANCE_0\n");
 		do {
 #define T18	comc_t18
-			if (mxt_get_data(&string, temp, STRING_SIZE) < 0)
+			if (mxt_get_data(&mxt_string, temp, STRING_SIZE) < 0)
 				break;
 
 			COMP_AND_GET2("CTRL", T18.ctrl);
@@ -974,7 +974,7 @@ static int parse_object_data(struct device *dev,
 		print_debug("SPT_GPIOPWM_T19_INSTANCE_0\n");
 		do {
 #define T19	gpiopwm_t19
-			if (mxt_get_data(&string, temp, STRING_SIZE) < 0)
+			if (mxt_get_data(&mxt_string, temp, STRING_SIZE) < 0)
 				break;
 
 			COMP_AND_GET2("CTRL", T19.ctrl);
@@ -1003,7 +1003,7 @@ static int parse_object_data(struct device *dev,
 			pog_t24 = &pconfig->config.onegesture1_t24;
 
 		do {
-			if (mxt_get_data(&string, temp, STRING_SIZE) < 0)
+			if (mxt_get_data(&mxt_string, temp, STRING_SIZE) < 0)
 				break;
 
 			COMP_AND_GET3("CTRL", pog_t24->ctrl);
@@ -1024,7 +1024,7 @@ static int parse_object_data(struct device *dev,
 	} else if (object_num == MXT_SPT_SELFTEST_T25) {
 		print_debug("SPT_SELFTEST_T25_INSTANCE_0\n");
 		do {
-			if (mxt_get_data(&string, temp, STRING_SIZE) < 0)
+			if (mxt_get_data(&mxt_string, temp, STRING_SIZE) < 0)
 				break;
 
 			if (f_version <= 10) {
@@ -1072,7 +1072,7 @@ static int parse_object_data(struct device *dev,
 			ptg_t27 = &pconfig->config.twogesture1_t27;
 
 		do {
-			if (mxt_get_data(&string, temp, STRING_SIZE) < 0)
+			if (mxt_get_data(&mxt_string, temp, STRING_SIZE) < 0)
 				break;
 
 			COMP_AND_GET3("CTRL", ptg_t27->ctrl);
@@ -1092,7 +1092,7 @@ static int parse_object_data(struct device *dev,
 			pgs_t40 = &pconfig->config.gripsuppression1_t40;
 
 		do {
-			if (mxt_get_data(&string, temp, STRING_SIZE) < 0)
+			if (mxt_get_data(&mxt_string, temp, STRING_SIZE) < 0)
 				break;
 
 			COMP_AND_GET3("CTRL", pgs_t40->ctrl);
@@ -1112,7 +1112,7 @@ static int parse_object_data(struct device *dev,
 					  touchsuppression1_t42;
 
 			do {
-				if (mxt_get_data(&string, \
+				if (mxt_get_data(&mxt_string, \
 							temp, STRING_SIZE) < 0)
 					break;
 
@@ -1144,7 +1144,7 @@ static int parse_object_data(struct device *dev,
 					  tsuppression1_ver2_t42;
 
 			do {
-				if (mxt_get_data(&string, \
+				if (mxt_get_data(&mxt_string, \
 							temp, STRING_SIZE) < 0)
 					break;
 
@@ -1173,7 +1173,7 @@ static int parse_object_data(struct device *dev,
 	} else if (object_num == MXT_SPT_CTECONFIG_T46) {
 		print_debug("SPT_CTECONFIG_T46_INSTANCE_0\n");
 		do {
-			if (mxt_get_data(&string, temp, STRING_SIZE) < 0)
+			if (mxt_get_data(&mxt_string, temp, STRING_SIZE) < 0)
 				break;
 
 			if (f_version <= 10) {
@@ -1222,7 +1222,7 @@ static int parse_object_data(struct device *dev,
 		else
 			ps_t47 = &pconfig->config.stylus1_t47;
 		do {
-			if (mxt_get_data(&string, temp, STRING_SIZE) < 0)
+			if (mxt_get_data(&mxt_string, temp, STRING_SIZE) < 0)
 				break;
 
 			COMP_AND_GET3("CTRL", ps_t47->ctrl);
@@ -1239,7 +1239,7 @@ static int parse_object_data(struct device *dev,
 	} else if (object_num == MXT_PROCG_NOISESUPPRESSION_T48) {
 		print_debug("PROCG_NOISESUPPRESSION_T48_INSTANCE_0\n");
 		do {
-			if (mxt_get_data(&string, temp, STRING_SIZE) < 0)
+			if (mxt_get_data(&mxt_string, temp, STRING_SIZE) < 0)
 				break;
 
 			if (f_version <= 10) {
@@ -1399,7 +1399,7 @@ static int parse_object_data(struct device *dev,
 		else
 			tpx_t52 = &pconfig->config.proximity1_t52;
 		do {
-			if (mxt_get_data(&string, temp, STRING_SIZE) < 0)
+			if (mxt_get_data(&mxt_string, temp, STRING_SIZE) < 0)
 				break;
 
 			COMP_AND_GET3("CTRL", tpx_t52->ctrl);
@@ -1424,7 +1424,7 @@ static int parse_object_data(struct device *dev,
 		else
 			tpx_t55 = &pconfig->config.adaptive_threshold1_t55;
 		do {
-			if (mxt_get_data(&string, temp, STRING_SIZE) < 0)
+			if (mxt_get_data(&mxt_string, temp, STRING_SIZE) < 0)
 				break;
 
 			COMP_AND_GET3("CTRL", tpx_t55->ctrl);
@@ -1439,7 +1439,7 @@ static int parse_object_data(struct device *dev,
 		print_debug("PROCI_SHIELDLESS_T56_INSTANCE_0\n");
 		do {
 #define T56	shieldless_t56
-			if (mxt_get_data(&string, temp, STRING_SIZE) < 0)
+			if (mxt_get_data(&mxt_string, temp, STRING_SIZE) < 0)
 				break;
 
 			COMP_AND_GET2("CTRL", T56.ctrl);
@@ -1479,7 +1479,7 @@ static int parse_object_data(struct device *dev,
 		else
 			tpx_t57 = &pconfig->config.exttouchscreendata_t57;
 		do {
-			if (mxt_get_data(&string, temp, STRING_SIZE) < 0)
+			if (mxt_get_data(&mxt_string, temp, STRING_SIZE) < 0)
 				break;
 
 			COMP_AND_GET3("CTRL", tpx_t57->ctrl);
@@ -1531,11 +1531,11 @@ static void mxt_trim_endws(char *str)
 
 	if (str) {
 		size = strlen(str);
-		if (size >= 1 && (str[size - 1] == '\r' ||
-				str[size - 1] == '\n'))
+		if ((size >= 1) && ((str[size - 1] == '\r') ||
+				(str[size - 1] == '\n')))
 			str[size - 1] = '\0';
-		if (size >= 2 && (str[size - 2] == '\r' ||
-				str[size - 2] == '\n'))
+		if ((size >= 2) && ((str[size - 2] == '\r') ||
+				(str[size - 2] == '\n')))
 			str[size - 2] = '\0';
 	}
 }
@@ -1545,8 +1545,8 @@ static int mxt_check_section(char *str)
 	int size, section;
 
 	size = strlen(str);
-	if (size >= 3 && (str[0] == '[' &&
-			str[size - 1] == ']'))
+	if ((size >= 3) && ((str[0] == '[') &&
+			(str[size - 1] == ']')))
 		section = 1;
 	else
 		section = 0;
@@ -1554,14 +1554,14 @@ static int mxt_check_section(char *str)
 	return section;
 }
 
-static int mxt_get_data(char **org, char *string, int str_size)
+static int mxt_get_data(char **org, char *mxt_string, int str_size)
 {
 	char *line_str;
 
 	if (!org)
 		return -GET_DATA_ERR_EOF;
 
-	if (!string || str_size <= 0)
+	if (!mxt_string || (str_size <= 0))
 		return -GET_DATA_ERR_INPARAM;
 
 	line_str = strsep(org, "\n");
@@ -1578,7 +1578,7 @@ static int mxt_get_data(char **org, char *string, int str_size)
 	if (mxt_check_section(line_str))
 		return -GET_DATA_ERR_SECTION;
 
-	strcpy(string, line_str);
+	strcpy(mxt_string, line_str);
 
 	return GET_DATA_ERR_NONE;
 }

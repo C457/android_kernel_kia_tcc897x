@@ -8,7 +8,7 @@ EXT_MODULE_SYMBOL = $(BASE_DIR)/../Module.symvers
 
 INSTALL_DIR = ./mod
 
-#CC=arm-eabi-gcc
+CC=arm-eabi-gcc
 #CC=arm-linux-gnueabihf-gcc
 
 KERNEL_DIR = /home/kh2/work_od_and/kernel/samsung/exynos5422

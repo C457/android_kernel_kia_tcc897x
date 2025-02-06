@@ -91,7 +91,7 @@ static int bl_read_status(struct mip4_ts_info *info)
 		if (i2c_transfer(info->client->adapter, msg, ARRAY_SIZE(msg)) != ARRAY_SIZE(msg)) {
 			dev_err(&info->client->dev, "%s [ERROR] i2c_transfer\n", __func__);
 			ret = -1;
-			goto ERROR;
+			goto MIP4_ERROR;
 		}
 
 		if (result == MIP4_BOOT_STATUS_DONE) {
@@ -109,7 +109,7 @@ static int bl_read_status(struct mip4_ts_info *info)
 		} else if (result == MIP4_BOOT_STATUS_ERROR) {
 			dev_dbg(&info->client->dev, "%s - Error\n", __func__);
 			ret = -1;
-			goto ERROR;
+			goto MIP4_ERROR;
 		} else {
 			dev_err(&info->client->dev, "%s [ERROR] wrong value [0x%02X]\n", __func__, result);
 			ret = -1;
@@ -119,14 +119,14 @@ static int bl_read_status(struct mip4_ts_info *info)
 
 	if (!cnt) {
 		dev_err(&info->client->dev, "%s [ERROR] count overflow - cnt [%d] status [0x%02X]\n", __func__, cnt, result);
-		goto ERROR;
+		goto MIP4_ERROR;
 	}
 #if USE_INT_DBG
 	dev_dbg(&info->client->dev, "%s [DONE]\n", __func__);
 #endif
 	return ret;
 
-ERROR:
+MIP4_ERROR:
 	dev_err(&info->client->dev, "%s [ERROR]\n", __func__);
 	return ret;
 }
@@ -164,7 +164,7 @@ static int bl_change_mode(struct mip4_ts_info *info, u8 mode)
 		write_buf[2] = mode;
 		if (i2c_master_send(info->client, write_buf, 3) != 3) {
 			dev_err(&info->client->dev, "%s [ERROR] i2c_master_send\n", __func__);
-			goto ERROR;
+			goto MIP4_ERROR;
 		}
 		dev_dbg(&info->client->dev, "%s - Write : Mode [%d]\n", __func__, mode);
 
@@ -177,7 +177,7 @@ static int bl_change_mode(struct mip4_ts_info *info, u8 mode)
 		if (i2c_transfer(info->client->adapter, msg, ARRAY_SIZE(msg)) != ARRAY_SIZE(msg)) {
 			dev_err(&info->client->dev, "%s [ERROR] i2c_transfer\n", __func__);
 			ret = -1;
-			goto ERROR;
+			goto MIP4_ERROR;
 		}
 		dev_dbg(&info->client->dev, "%s - Read : Mode [%d]\n", __func__, read_buf[0]);
 
@@ -188,13 +188,13 @@ static int bl_change_mode(struct mip4_ts_info *info, u8 mode)
 
 	if (!cnt) {
 		dev_err(&info->client->dev, "%s [ERROR] count overflow - cnt [%d]\n", __func__, cnt);
-		goto ERROR;
+		goto MIP4_ERROR;
 	}
 
 	dev_dbg(&info->client->dev, "%s [DONE]\n", __func__);
 	return ret;
 
-ERROR:
+MIP4_ERROR:
 	dev_err(&info->client->dev, "%s [ERROR]\n", __func__);
 	return ret;
 }
@@ -229,7 +229,7 @@ static int bl_read_info(struct mip4_ts_info *info, u16 *buf_addr)
 	if (i2c_transfer(info->client->adapter, msg, ARRAY_SIZE(msg)) != ARRAY_SIZE(msg)) {
 		dev_err(&info->client->dev, "%s [ERROR] i2c_transfer\n", __func__);
 		ret = -1;
-		goto ERROR;
+		goto MIP4_ERROR;
 	}
 
 	*buf_addr = (u16)((read_buf[1] << 8) | read_buf[0]);
@@ -238,7 +238,7 @@ static int bl_read_info(struct mip4_ts_info *info, u16 *buf_addr)
 	dev_dbg(&info->client->dev, "%s [DONE]\n", __func__);
 	return ret;
 
-ERROR:
+MIP4_ERROR:
 	dev_err(&info->client->dev, "%s [ERROR]\n", __func__);
 	return ret;
 }
@@ -258,18 +258,18 @@ static int bl_erase_mass(struct mip4_ts_info *info)
 	write_buf[2] = MIP4_BOOT_CMD_MASS_ERASE;
 	if (i2c_master_send(info->client, write_buf, 3) != 3) {
 		dev_err(&info->client->dev, "%s [ERROR] i2c_master_send\n", __func__);
-		goto ERROR;
+		goto MIP4_ERROR;
 	}
 
 	//Status
 	if (bl_read_status(info) != 0) {
-		goto ERROR;
+		goto MIP4_ERROR;
 	}
 
 	dev_dbg(&info->client->dev, "%s [DONE]\n", __func__);
 	return 0;
 
-ERROR:
+MIP4_ERROR:
 	dev_err(&info->client->dev, "%s [ERROR]\n", __func__);
 	return -1;
 }
@@ -287,7 +287,7 @@ static int bl_write_page(struct mip4_ts_info *info, int offset, const u8 *data, 
 
 	if (length > BL_PACKET_SIZE) {
 		dev_err(&info->client->dev, "%s [ERROR] packet length overflow\n", __func__);
-		goto ERROR;
+		goto MIP4_ERROR;
 	}
 
 	//Addr
@@ -299,7 +299,7 @@ static int bl_write_page(struct mip4_ts_info *info, int offset, const u8 *data, 
 	write_buf[5] = (u8)((offset >> 24) & 0xFF);
 	if (i2c_master_send(info->client, write_buf, 6) != 6) {
 		dev_err(&info->client->dev, "%s [ERROR] i2c_master_send\n", __func__);
-		goto ERROR;
+		goto MIP4_ERROR;
 	}
 #if USE_INT_DBG
 	dev_dbg(&info->client->dev, "%s - Addr [0x%06X]\n", __func__, offset);
@@ -314,7 +314,7 @@ static int bl_write_page(struct mip4_ts_info *info, int offset, const u8 *data, 
 	write_buf[5] = (u8)((length >> 24) & 0xFF);
 	if (i2c_master_send(info->client, write_buf, 6) != 6) {
 		dev_err(&info->client->dev, "%s [ERROR] i2c_master_send\n", __func__);
-		goto ERROR;
+		goto MIP4_ERROR;
 	}
 #if USE_INT_DBG
 	dev_dbg(&info->client->dev, "%s - Size [%d]\n", __func__, length);
@@ -327,7 +327,7 @@ static int bl_write_page(struct mip4_ts_info *info, int offset, const u8 *data, 
 		memcpy(&write_buf[2], &data[buf_offset], BL_PACKET_SIZE);
 		if (i2c_master_send(info->client, write_buf, (2 + BL_PACKET_SIZE)) != (2 + BL_PACKET_SIZE)) {
 			dev_err(&info->client->dev, "%s [ERROR] i2c_master_send\n", __func__);
-			goto ERROR;
+			goto MIP4_ERROR;
 		}
 #if USE_INT_DBG
 		dev_dbg(&info->client->dev, "%s - PacketSize [%d] BufOffset [0x%04X]\n", __func__, BL_PACKET_SIZE, buf_offset);
@@ -340,19 +340,19 @@ static int bl_write_page(struct mip4_ts_info *info, int offset, const u8 *data, 
 	write_buf[2] = MIP4_BOOT_CMD_WRITE;
 	if (i2c_master_send(info->client, write_buf, 3) != 3) {
 		dev_err(&info->client->dev, "%s [ERROR] i2c_master_send\n", __func__);
-		goto ERROR;
+		goto MIP4_ERROR;
 	}
 
 	//Status
 	if (bl_read_status(info) != 0) {
-		goto ERROR;
+		goto MIP4_ERROR;
 	}
 #if USE_INT_DBG
 	dev_dbg(&info->client->dev, "%s [DONE]\n", __func__);
 #endif
 	return 0;
 
-ERROR:
+MIP4_ERROR:
 	dev_err(&info->client->dev, "%s [ERROR]\n", __func__);
 	return -1;
 }
@@ -391,7 +391,7 @@ static int bl_read_page(struct mip4_ts_info *info, int offset, u8 *data, int len
 	write_buf[5] = (u8)((offset >> 24) & 0xFF);
 	if (i2c_master_send(info->client, write_buf, 6) != 6) {
 		dev_err(&info->client->dev, "%s [ERROR] i2c_master_send\n", __func__);
-		goto ERROR;
+		goto MIP4_ERROR;
 	}
 #if USE_INT_DBG
 	dev_dbg(&info->client->dev, "%s - Addr [0x%06X]\n", __func__, offset);
@@ -405,7 +405,7 @@ static int bl_read_page(struct mip4_ts_info *info, int offset, u8 *data, int len
 	write_buf[5] = (u8)((length >> 24) & 0xFF);
 	if (i2c_master_send(info->client, write_buf, 6) != 6) {
 		dev_err(&info->client->dev, "%s [ERROR] i2c_master_send\n", __func__);
-		goto ERROR;
+		goto MIP4_ERROR;
 	}
 #if USE_INT_DBG
 	dev_dbg(&info->client->dev, "%s - Size [%d]\n", __func__, length);
@@ -416,12 +416,12 @@ static int bl_read_page(struct mip4_ts_info *info, int offset, u8 *data, int len
 	write_buf[2] = MIP4_BOOT_CMD_READ;
 	if (i2c_master_send(info->client, write_buf, 3) != 3) {
 		dev_err(&info->client->dev, "%s [ERROR] i2c_master_send\n", __func__);
-		goto ERROR;
+		goto MIP4_ERROR;
 	}
 
 	//Status
 	if (bl_read_status(info) != 0) {
-		goto ERROR;
+		goto MIP4_ERROR;
 	}
 
 	//Read
@@ -430,7 +430,7 @@ static int bl_read_page(struct mip4_ts_info *info, int offset, u8 *data, int len
 		write_buf[1] = (u8)((buf_addr + buf_offset) & 0xFF);
 		if (i2c_transfer(info->client->adapter, msg, ARRAY_SIZE(msg)) != ARRAY_SIZE(msg)) {
 			dev_err(&info->client->dev, "%s [ERROR] i2c_transfer\n", __func__);
-			goto ERROR;
+			goto MIP4_ERROR;
 		}
 		memcpy(&data[buf_offset], read_buf, BL_PACKET_SIZE);
 #if USE_INT_DBG
@@ -442,7 +442,7 @@ static int bl_read_page(struct mip4_ts_info *info, int offset, u8 *data, int len
 #endif
 	return 0;
 
-ERROR:
+MIP4_ERROR:
 	dev_err(&info->client->dev, "%s [ERROR]\n", __func__);
 	return -1;
 }
@@ -465,7 +465,7 @@ static int bl_erase_page(struct mip4_ts_info *info, unsigned int addr)
 	write_buf[5] = (u8)((addr >> 24) & 0xFF);
 	if (i2c_master_send(info->client, write_buf, 6) != 6) {
 		dev_err(&info->client->dev, "%s [ERROR] i2c_master_send\n", __func__);
-		goto ERROR;
+		goto MIP4_ERROR;
 	}
 	dev_dbg(&info->client->dev, "%s - Addr [0x%06X]\n", __func__, addr);
 
@@ -478,7 +478,7 @@ static int bl_erase_page(struct mip4_ts_info *info, unsigned int addr)
 	write_buf[5] = (u8)((BL_PAGE_SIZE >> 24) & 0xFF);
 	if (i2c_master_send(info->client, write_buf, 6) != 6) {
 		dev_err(&info->client->dev, "%s [ERROR] i2c_master_send\n", __func__);
-		goto ERROR;
+		goto MIP4_ERROR;
 	}
 	dev_dbg(&info->client->dev, "%s - Size [%d]\n", __func__, BL_PAGE_SIZE);
 
@@ -488,18 +488,18 @@ static int bl_erase_page(struct mip4_ts_info *info, unsigned int addr)
 	write_buf[2] = MIP4_BOOT_CMD_ERASE;
 	if (i2c_master_send(info->client, write_buf, 3) != 3) {
 		dev_err(&info->client->dev, "%s [ERROR] i2c_master_send\n", __func__);
-		goto ERROR;
+		goto MIP4_ERROR;
 	}
 
 	//Status
 	if (bl_read_status(info) != 0) {
-		goto ERROR;
+		goto MIP4_ERROR;
 	}
 
 	dev_dbg(&info->client->dev, "%s [DONE]\n", __func__);
 	return 0;
 
-ERROR:
+MIP4_ERROR:
 	dev_err(&info->client->dev, "%s [ERROR]\n", __func__);
 	return -1;
 }
@@ -512,13 +512,13 @@ static int bl_enter(struct mip4_ts_info *info)
 	dev_dbg(&info->client->dev, "%s [START]\n", __func__);
 
 	if (bl_change_mode(info, MIP4_BOOT_MODE_BOOT) != 0) {
-		goto ERROR;
+		goto MIP4_ERROR;
 	}
 
 	dev_dbg(&info->client->dev, "%s [DONE]\n", __func__);
 	return 0;
 
-ERROR:
+MIP4_ERROR:
 	dev_err(&info->client->dev, "%s [ERROR]\n", __func__);
 	return -1;
 }
@@ -531,13 +531,13 @@ static int bl_exit(struct mip4_ts_info *info)
 	dev_dbg(&info->client->dev, "%s [START]\n", __func__);
 
 	if (bl_change_mode(info, MIP4_BOOT_MODE_APP) != 0) {
-		goto ERROR;
+		goto MIP4_ERROR;
 	}
 
 	dev_dbg(&info->client->dev, "%s [DONE]\n", __func__);
 	return 0;
 
-ERROR:
+MIP4_ERROR:
 	dev_err(&info->client->dev, "%s [ERROR]\n", __func__);
 	return -1;
 }
@@ -590,7 +590,7 @@ int mip4_ts_flash_fw(struct mip4_ts_info *info, const u8 *fw_data, size_t fw_siz
 #endif
 
 	/* Check bin size */
-	if (bin_info->bin_start_addr + bin_info->bin_length == fw_size) {
+	if ((bin_info->bin_start_addr + bin_info->bin_length) == fw_size) {
 		bin_size = bin_info->bin_start_addr + bin_info->bin_length;
 		bin_addr_start = bin_info->bin_start_addr;
 		bin_addr_end = bin_size;
@@ -639,7 +639,7 @@ int mip4_ts_flash_fw(struct mip4_ts_info *info, const u8 *fw_data, size_t fw_siz
 			if (mip4_ts_get_fw_version_u16(info, ver_chip)) {
 				mip4_ts_reset(info);
 			} else {
-				if(ver_chip[3] != 0 && ver_chip[2] != 0)
+				if((ver_chip[3] != 0) && (ver_chip[2] != 0))
 					break;
 			}
 		}
@@ -832,13 +832,13 @@ int mip4_ts_bin_fw_version(struct mip4_ts_info *info, const u8 *fw_data, size_t 
 	tail_size = (fw_data[fw_size - 5] << 8) | fw_data[fw_size - 6];
 	if (tail_size != MELFAS_BIN_TAIL_SIZE) {
 		dev_err(&info->client->dev, "%s [ERROR] wrong tail size [%d]\n", __func__, tail_size);
-		goto ERROR;
+		goto MIP4_ERROR;
 	}
 
 	//Check bin format
 	if (memcmp(&fw_data[fw_size - tail_size], tail_mark, 4)) {
 		dev_err(&info->client->dev, "%s [ERROR] wrong tail mark\n", __func__);
-		goto ERROR;
+		goto MIP4_ERROR;
 	}
 
 	//Read bin info
@@ -857,7 +857,7 @@ int mip4_ts_bin_fw_version(struct mip4_ts_info *info, const u8 *fw_data, size_t 
 	dev_dbg(&info->client->dev,"%s [DONE]\n", __func__);
 	return 0;
 
-ERROR:
+MIP4_ERROR:
 	dev_err(&info->client->dev,"%s [ERROR]\n", __func__);
 	return 1;
 }

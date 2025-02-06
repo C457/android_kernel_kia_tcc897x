@@ -12,10 +12,24 @@
 *
 */
 
-#ifndef _ATMEL_MXT336S_H
-#define _ATMEL_MXT336S_H
+#ifndef ATMEL_MXT336S_H
+#define ATMEL_MXT336S_H
 
 #define INCLUDE_LCD_TOUCHKEY
+
+#ifdef CONFIG_DAUDIO_KK
+#include <mach/daudio.h>
+#include <mach/daudio_info.h>
+#include <mach/daudio_pinctl.h>
+#include <mach/gpio.h>
+#include "serdes.h"
+#elif defined(CONFIG_WIDE_PE_COMMON)
+#include <mobis/daudio.h>
+#include <mobis/daudio_info.h>
+#include <mobis/daudio_pinctl.h>
+#include <mobis/serdes/serdes.h>
+#include <linux/tcc_gpio.h>
+#endif
 
 #include <linux/semaphore.h>
 #ifdef CONFIG_DAUDIO_KK
@@ -37,7 +51,7 @@
 //#define MXT_CONFIG_RAW_FILE
 #define MXT_CONFIG_XCFG_FILE
 
-#define MXT_JIG_DETECT
+//#define MXT_JIG_DETECT
 #define MXT_JIG_DETECT_DISABLE	0
 #define MXT_JIG_DETECT_ENABLE	1
 
@@ -1167,6 +1181,7 @@ struct mxt_data {
 		struct mutex lock;
 	} serdes;
 
+	bool irq_enabled;
 };
 
 #if defined(INCLUDE_LCD_TOUCHKEY )
@@ -1242,8 +1257,22 @@ void hw_reset_chip(struct mxt_data *mxt);
 
 void mxt_hw_reset(void);
 
+extern int LCD_VER;
 int mobis_touch_update_check(void);
 void mobis_touch_update_complete(void);
+void mobis_serdes_need_log(void);
+void mobis_show_need_log_count(void);
+void mobis_serdes_status_count_reset(void);
+void mobis_serdes_status_count_update(u8 *serdes_check_value_arr, int lock_pin, int line_fault);
+void mobis_serdes_status_count_read(char *buffer);
+void mobis_serdes_status_count_write(char *buffer);
+bool mobis_touch_counter_flag_check(int id);
+void mobis_touch_counter_press(char *buf, int id);
+void mobis_touch_counter_release(char *buf, int id);
+void mobis_touch_counter_print(void);
+void mobis_touch_counter_reset(void);
+u8 mobis_idtc_check_read(void);
+void mobis_idtc_check_write(u8 *serdes_check_value_arr, int lock_pin, int line_fault, bool touch_watchdog, bool touch_crc_err);
 #if defined(CONFIG_WIDE_PE_COMMON)||defined(CONFIG_TOUCHSCREEN_ONEBIN)
 int mxt336s_init(void);
 void mxt336s_cleanup(void);

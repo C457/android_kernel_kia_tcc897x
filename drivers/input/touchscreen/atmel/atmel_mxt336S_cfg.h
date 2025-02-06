@@ -8,8 +8,8 @@
 * published by the Free Software Foundation.
 *
 */
-#ifndef __ATMEL_MXT336S_CFG_H
-#define __ATMEL_MXT336S_CFG_H
+#ifndef ATMEL_MXT336S_CFG_H
+#define ATMEL_MXT336S_CFG_H
 
 /**                            
  ** @author sjpark@cleinsoft    
@@ -802,4 +802,4 @@ extern int mxt_noisesuppression_t48_config_for_TA(struct mxt_data *mxt);
 #define TOMEM	0
 #define TODEV	1
 
-#endif  /* __ATMEL_MXT336S_CFG_H */
+#endif  /* ATMEL_MXT336S_CFG_H */

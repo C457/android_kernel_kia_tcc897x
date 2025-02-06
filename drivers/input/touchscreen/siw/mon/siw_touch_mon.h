@@ -9,8 +9,8 @@
  * version 2 as published by the Free Software Foundation.
  */
 
-#ifndef __SIW_TOUCH_MON_H
-#define __SIW_TOUCH_MON_H
+#ifndef SIW_TOUCH_MON_H
+#define SIW_TOUCH_MON_H
 
 #include <linux/list.h>
 #include <linux/slab.h>
@@ -56,7 +56,7 @@ enum {
 /*
  * [31:16] : original total size
  * [15:00] : adjusted total size by print limit
- * See '__siw_mon_txt_read_get_len'
+ * See 'siw_mon_txt_read_get_len'
  */
 static inline int siw_mon_buf_size_tot(int size)
 {
@@ -161,7 +161,7 @@ struct siw_mon_data {
 	int inc_cnt;
 };
 
-enum _SIW_MON_TYPE {
+enum SIW_MON_TYPE {
 	SIW_MON_NONE = 0,
 	SIW_MON_BUS,
 	SIW_MON_EVT,
@@ -234,11 +234,11 @@ struct siw_mon_reader {
 			unsigned long *flags);
 };
 
-extern struct mutex __siw_mon_lock;
+extern struct mutex siw_mon_lock;
 
 extern void siw_mon_reader_add(struct siw_mon_term *mterm, struct siw_mon_reader *r);
 extern void siw_mon_reader_del(struct siw_mon_term *mterm, struct siw_mon_reader *r);
 
-#endif	/* __SIW_TOUCH_MON_H */
+#endif	/* SIW_TOUCH_MON_H */
 
 

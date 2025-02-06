@@ -726,11 +726,15 @@ config USB_SERIAL_KT_LGIT_MODEM
 	  Vendor id : 0x1D74
 	  Product id : 0x2202
 
-config USB_SERIAL_LGIT_9x28_MODEM
-	bool "USB Serial LGIT 9x28 MODEM"
+config LGIT_MODEM
+	bool "LGIT Modem Driver"
 	help
-	  DAUDIO KT LGIT LTE MODEM
+	  Dynamic Multi RmNet Driver
 	  Vendor id : 0x1D74
-	  Product id : 0x3100
+	  Product id : 0x3000 (for fail safe of download)
+	  Product id : 0x3100 (Single RmNet)
+	  Product id : 0x3102 (Dual RmNet)
+	  Product id : 0x3103 (3 RmNet)
+	  Product id : 0x3104 (4 RmNet)
 
 endif # USB_SERIAL

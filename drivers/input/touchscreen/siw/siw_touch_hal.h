@@ -9,8 +9,8 @@
  * version 2 as published by the Free Software Foundation.
  */
 
-#ifndef __SIW_TOUCH_HAL_H
-#define __SIW_TOUCH_HAL_H
+#ifndef SIW_TOUCH_HAL_H
+#define SIW_TOUCH_HAL_H
 
 #include "siw_touch_cfg.h"
 
@@ -21,7 +21,7 @@
 #include "siw_touch_hal_reg.h"
 
 #if defined(CONFIG_TOUCHSCREEN_SIW_SW17700)
-#define __SIW_SUPPORT_ALIVE_DETECTION
+#define SIW_SUPPORT_ALIVE_DETECTION
 #endif
 
 struct siw_hal_rw_multi {
@@ -141,7 +141,7 @@ enum {
 #define SIW_LCD_DRIVING_MODE_STR(_mode)	\
 		[LCD_MODE_##_mode] = #_mode
 
-static const char *__siw_lcd_driving_mode_strs[] = {
+static const char *siw_lcd_driving_mode_strs[] = {
 	SIW_LCD_DRIVING_MODE_STR(U0),
 	SIW_LCD_DRIVING_MODE_STR(U2_UNBLANK),
 	SIW_LCD_DRIVING_MODE_STR(U2),
@@ -154,7 +154,7 @@ static const char *__siw_lcd_driving_mode_strs[] = {
 static inline const char *siw_lcd_driving_mode_str(int mode)
 {
 	return (mode < LCD_MODE_MAX) ?
-			__siw_lcd_driving_mode_strs[mode] : "(invalid)";
+			siw_lcd_driving_mode_strs[mode] : "(invalid)";
 }
 
 /*
@@ -214,9 +214,9 @@ enum {
 };
 
 #define MAX_RW_SIZE_POW			(10)
-#define MAX_RW_SIZE				__SIZE_POW(MAX_RW_SIZE_POW)		//1K
+#define MAX_RW_SIZE				SIZE_POW(MAX_RW_SIZE_POW)		//1K
 #define FLASH_CONF_SIZE_POWER	(10)
-#define FLASH_CONF_SIZE			(1 * __SIZE_POW(FLASH_CONF_SIZE_POWER))		// 1K
+#define FLASH_CONF_SIZE			(1 * SIZE_POW(FLASH_CONF_SIZE_POWER))		// 1K
 
 #define FLASH_KEY_CODE_CMD		0xDFC1
 #define FLASH_KEY_CONF_CMD		0xE87B
@@ -275,7 +275,7 @@ struct siw_hal_fw_info {
 	u32 date;
 	u32 time;
 	u32 conf_index;
-	/* __SIW_FW_TYPE_1 */
+	/* SIW_FW_TYPE_1 */
 	u32 conf_idx_addr;
 	u32 conf_dn_addr;
 	u32 boot_code_addr;
@@ -436,19 +436,19 @@ struct siw_hal_status_filter {
 	u32 width;
 	u32 pos;
 	u32 flag;
-#define _STS_FILTER_FLAG_TYPE_ERROR		(1<<0)
-#define _STS_FILTER_FLAG_ESD_SEND		(1<<16)
-#define _STS_FILTER_FLAG_CHK_FAULT		(1<<17)
+#define DEF_STS_FILTER_FLAG_TYPE_ERROR		(1<<0)
+#define DEF_STS_FILTER_FLAG_ESD_SEND		(1<<16)
+#define DEF_STS_FILTER_FLAG_CHK_FAULT		(1<<17)
 	const char *str;
 };
 
-#define _STS_FILTER(_id, _width, _pos, _flag, _str)	\
+#define STS_FILTER(_id, _width, _pos, _flag, _str)	\
 		{ .id = _id, .width = _width, .pos = _pos, .flag = _flag, .str = _str, }
 
 enum {
-	STS_FILTER_FLAG_TYPE_ERROR		= _STS_FILTER_FLAG_TYPE_ERROR,
-	STS_FILTER_FLAG_ESD_SEND		= _STS_FILTER_FLAG_ESD_SEND,
-	STS_FILTER_FLAG_CHK_FAULT		= _STS_FILTER_FLAG_CHK_FAULT,
+	STS_FILTER_FLAG_TYPE_ERROR		= DEF_STS_FILTER_FLAG_TYPE_ERROR,
+	STS_FILTER_FLAG_ESD_SEND		= DEF_STS_FILTER_FLAG_ESD_SEND,
+	STS_FILTER_FLAG_CHK_FAULT		= DEF_STS_FILTER_FLAG_CHK_FAULT,
 };
 
 #define REG_LOG_MAX		8
@@ -595,22 +595,22 @@ struct siw_touch_chip {
 	/* */
 	struct siw_hal_fquirks fquirks;
 	/* */
-#if defined(__SIW_SUPPORT_ALIVE_DETECTION)
+#if defined(SIW_SUPPORT_ALIVE_DETECTION)
 	int alive_level;
 	int irq_is_alive;
 	u32 irq_count_alive;
 	u32 irq_count_report;
 	u32 irq_count_others;
-#endif	/* __SIW_SUPPORT_ALIVE_DETECTION */
+#endif	/* SIW_SUPPORT_ALIVE_DETECTION */
 };
 
-#if defined(__SIW_SUPPORT_ALIVE_DETECTION)
+#if defined(SIW_SUPPORT_ALIVE_DETECTION)
 #define ALIVE_LEVEL_NOT_SUPPORT		0
 #define ALIVE_LEVEL_MIN				1
 #define ALIVE_LEVEL_DEFAULT			7
 #define ALIVE_LEVEL_MAX				10
 
-static const char *__siw_alive_level_strs[] = {
+static const char *siw_alive_level_strs[] = {
 	"(not supported)",
 	"Lv.1 (500 ms)",
 	"Lv.2 (660 ms)",
@@ -628,9 +628,9 @@ static inline const char *siw_alive_level_str(int level)
 {
 	return ((level == ALIVE_LEVEL_NOT_SUPPORT) ||
 			((level >= ALIVE_LEVEL_MIN) && (level <= ALIVE_LEVEL_MAX))) ?
-			__siw_alive_level_strs[level] : "(invalid)";
+			siw_alive_level_strs[level] : "(invalid)";
 }
-#endif	/* __SIW_SUPPORT_ALIVE_DETECTION */
+#endif	/* SIW_SUPPORT_ALIVE_DETECTION */
 
 static inline int hal_dbg_delay(struct siw_touch_chip *chip, int index)
 {
@@ -650,14 +650,14 @@ enum {
 #define SWIPE_MAX_NUM				2
 #define TCI_DEBUG_MAX_NUM			16
 #define SWIPE_DEBUG_MAX_NUM			8
-#define DISTANCE_INTER_TAP			__SIZE_POW(1) /* 2 */
-#define DISTANCE_TOUCHSLOP			__SIZE_POW(2)	/* 4 */
-#define TIMEOUT_INTER_TAP_LONG		__SIZE_POW(3)	/* 8 */
-#define MULTI_FINGER				__SIZE_POW(4)	/* 16 */
-#define DELAY_TIME					__SIZE_POW(5)	/* 32 */
-#define TIMEOUT_INTER_TAP_SHORT		__SIZE_POW(6)	/* 64 */
-#define PALM_STATE					__SIZE_POW(7)	/* 128 */
-#define TAP_TIMEOVER				__SIZE_POW(8)	/* 256 */
+#define DISTANCE_INTER_TAP			SIZE_POW(1) /* 2 */
+#define DISTANCE_TOUCHSLOP			SIZE_POW(2)	/* 4 */
+#define TIMEOUT_INTER_TAP_LONG		SIZE_POW(3)	/* 8 */
+#define MULTI_FINGER				SIZE_POW(4)	/* 16 */
+#define DELAY_TIME					SIZE_POW(5)	/* 32 */
+#define TIMEOUT_INTER_TAP_SHORT		SIZE_POW(6)	/* 64 */
+#define PALM_STATE					SIZE_POW(7)	/* 128 */
+#define TAP_TIMEOVER				SIZE_POW(8)	/* 256 */
 
 #define TCI_DEBUG_ALL				(0 | \
 									DISTANCE_INTER_TAP |	\
@@ -703,6 +703,8 @@ static inline u32 siw_hal_boot_sts_pos_busy(struct siw_touch_chip *chip)
 	case 1:
 		pos = 0;
 		break;
+	defaul:
+		break;
 	}
 
 	return pos;
@@ -717,6 +719,8 @@ static inline u32 siw_hal_boot_sts_pos_dump_err(struct siw_touch_chip *chip)
 	case 1:
 		pos = 2;
 		break;
+	default:
+		break;
 	}
 
 	return pos;
@@ -729,6 +733,8 @@ static inline u32 siw_hal_boot_sts_mask_empty(struct siw_touch_chip *chip)
 	switch (chip->opt.t_boot_mode) {
 	case 2:
 		mask = BIT(6);
+		break;
+	default:
 		break;
 	}
 
@@ -754,6 +760,6 @@ extern int siw_hal_ic_test_unit(struct device *dev, u32 data);
 
 extern struct siw_touch_operations *siw_hal_get_default_ops(int opt);
 
-#endif	/* __SIW_TOUCH_HAL_H */
+#endif	/* SIW_TOUCH_HAL_H */
 
 

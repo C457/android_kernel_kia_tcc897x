@@ -9,8 +9,8 @@
  * version 2 as published by the Free Software Foundation.
  */
 
-#ifndef __SIW_TOUCH_IRQ_H
-#define __SIW_TOUCH_IRQ_H
+#ifndef SIW_TOUCH_IRQ_H
+#define SIW_TOUCH_IRQ_H
 
 #include <linux/irq.h>
 #include <linux/interrupt.h>
@@ -39,4 +39,4 @@ extern int siw_touch_request_irq(struct siw_ts *ts,
 extern void siw_touch_free_irq(struct siw_ts *ts);
 
 
-#endif	/* __SIW_TOUCH_IRQ_H */
+#endif	/* SIW_TOUCH_IRQ_H */

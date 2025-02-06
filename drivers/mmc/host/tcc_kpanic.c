@@ -267,6 +267,7 @@ static int tcc_mmc_kpanic_thread(void *dummy)
 			goto out;
 		}
 
+#if 0 // somtimes "mmc partition switch failed" issue occurs
 		kpanic_card->card->ext_csd.part_config &= ~EXT_CSD_PART_CONFIG_ACC_MASK;
 		kpanic_card->card->ext_csd.part_config = 0;
 		rc2 = mmc_switch(kpanic_card->card, EXT_CSD_CMD_SET_NORMAL,
@@ -277,7 +278,7 @@ static int tcc_mmc_kpanic_thread(void *dummy)
 			ret = KPANIC_PART_SWITCH_FAIL;
 			goto out;
 		}
-
+#endif
 		sg_init_one(&sg, kpanic_card->buffer, 512);
 
 		offset = tcc_kpanic_base;

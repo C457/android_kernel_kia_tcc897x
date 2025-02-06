@@ -163,7 +163,7 @@ void tca_serial_gpio_setting(int nFlag_fc, int nPort)
 	if (nPort > 7)
 		return;
 
-	#if defined(CONFIG_XM)
+	#if defined(INCLUDE_XM)
 	if (nPort == 4)
 	{
 	       printk("%s() skipped due to SXM requirement\n", __FUNCTION__);

@@ -68,7 +68,7 @@ static struct page *alloc_buffer_page(struct ion_system_heap *heap,
 	} else {
 		gfp_t gfp_flags = low_order_gfp_flags;
 
-		if (order > 4)
+		if (order > 1)
 			gfp_flags = high_order_gfp_flags;
 		page = alloc_pages(gfp_flags | __GFP_COMP, order);
 		if (!page)
@@ -288,7 +288,7 @@ struct ion_heap *ion_system_heap_create(struct ion_platform_heap *unused)
 		struct ion_page_pool *pool;
 		gfp_t gfp_flags = low_order_gfp_flags;
 
-		if (orders[i] > 4)
+		if (orders[i] > 1)
 			gfp_flags = high_order_gfp_flags;
 		pool = ion_page_pool_create(gfp_flags, orders[i]);
 		if (!pool)

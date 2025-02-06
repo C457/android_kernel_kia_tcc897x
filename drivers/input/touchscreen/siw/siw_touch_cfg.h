@@ -11,15 +11,15 @@
 
 #include <linux/version.h>
 
-#ifndef __SIW_TOUCH_CFG_H
-#define __SIW_TOUCH_CFG_H
+#ifndef SIW_TOUCH_CFG_H
+#define SIW_TOUCH_CFG_H
 
 #if defined(CONFIG_PINCTRL)
-#define __SIW_SUPPORT_PINCTRL
+#define SIW_SUPPORT_PINCTRL
 #endif
 
 #if defined(CONFIG_REGULATOR)
-#define __SIW_SUPPORT_PWRCTRL
+#define SIW_SUPPORT_PWRCTRL
 #endif
 
 //#define __SIW_SUPPORT_MISC
@@ -30,7 +30,7 @@
 //#define __SIW_SUPPORT_ABT
 #endif
 
-#define __SIW_SUPPORT_PRD
+#define SIW_SUPPORT_PRD
 
 #if defined(CONFIG_TOUCHSCREEN_SIW_LG4895) ||	\
 	defined(CONFIG_TOUCHSCREEN_SIW_LG4946) ||	\
@@ -46,7 +46,7 @@
 //#define __SIW_SUPPORT_DEBUG_OPTION
 
 #if defined(CONFIG_ANDROID)
-#define __SIW_SUPPORT_WAKE_LOCK
+#define SIW_SUPPORT_WAKE_LOCK
 #endif
 
 #if defined(CONFIG_TOUCHSCREEN_SIW_LG4894) ||	\
@@ -75,7 +75,7 @@
 	defined(CONFIG_TOUCHSCREEN_SIW_SW49501) ||	\
 	defined(CONFIG_TOUCHSCREEN_SIW_SW42103) ||	\
 	defined(CONFIG_TOUCHSCREEN_SIW_SW17700)
-#define __SIW_FW_TYPE_1
+#define SIW_FW_TYPE_1
 #endif
 
 #if defined(CONFIG_TOUCHSCREEN_SIW_SW42103)
@@ -86,35 +86,35 @@
 //#define __SIW_SUPPORT_PM_QOS
 
 #if defined(CONFIG_OF)
-#define __SIW_CONFIG_OF
+#define SIW_CONFIG_OF
 #endif
 
 #if defined(CONFIG_HAS_EARLYSUSPEND)
 //#define __SIW_CONFIG_EARLYSUSPEND
 #elif defined(CONFIG_FB)
-#define __SIW_CONFIG_FB
+#define SIW_CONFIG_FB
 #endif
 
 #if defined(CONFIG_TOUCHSCREEN_SIW_SW1828) ||	\
 	defined(CONFIG_TOUCHSCREEN_SIW_SW42103) ||	\
 	defined(CONFIG_TOUCHSCREEN_SIW_SW17700)
-#define __SIW_SUPPORT_PROBE_POST_RETRY
-#define __SIW_SUPPORT_INIT_RETRY
-#define __SIW_SUPPORT_PROBE_POST_RETRY_QUIRK
+#define SIW_SUPPORT_PROBE_POST_RETRY
+#define SIW_SUPPORT_INIT_RETRY
+#define SIW_SUPPORT_PROBE_POST_RETRY_QUIRK
 
-#ifdef __SIW_SUPPORT_WAKE_LOCK
-#undef __SIW_SUPPORT_WAKE_LOCK
+#ifdef SIW_SUPPORT_WAKE_LOCK
+#undef SIW_SUPPORT_WAKE_LOCK
 #endif
 
 #ifdef __SIW_SUPPORT_ABT
 #undef __SIW_SUPPORT_ABT
 #endif
 
-#ifdef __SIW_CONFIG_FB
-#undef __SIW_CONFIG_FB
+#ifdef SIW_CONFIG_FB
+#undef SIW_CONFIG_FB
 #endif
 
-#define __SIW_CONFIG_SYSTEM_PM
+#define SIW_CONFIG_SYSTEM_PM
 #elif defined(CONFIG_TOUCHSCREEN_SIW_SW42101)
 #define __SIW_BUS_ADDR_16BIT
 
@@ -122,21 +122,21 @@
 #undef __SIW_SUPPORT_ABT
 #endif
 
-#ifdef __SIW_SUPPORT_PRD
-#undef __SIW_SUPPORT_PRD
+#ifdef SIW_SUPPORT_PRD
+#undef SIW_SUPPORT_PRD
 #endif
 
-#define __SIW_CONFIG_SYSTEM_PM
+#define SIW_CONFIG_SYSTEM_PM
 #else	/* General case for Mobile */
 #define __SIW_CONFIG_PROX_ON_SUSPEND
 #define __SIW_CONFIG_PROX_ON_RESUME
 
 #define __SIW_CONFIG_KNOCK
 
-//#define __SIW_CONFIG_SYSTEM_PM	//Custom option for special scenario
+//#define SIW_CONFIG_SYSTEM_PM	//Custom option for special scenario
 #endif
 
-#if defined(__SIW_CONFIG_SYSTEM_PM)
+#if defined(SIW_CONFIG_SYSTEM_PM)
 #if defined(CONFIG_HIBERNATE_CALLBACKS)
 //#define __SIW_CONFIG_FASTBOOT		//Custom option for special scenario
 #endif	/* CONFIG_HIBERNATE_CALLBACKS */
@@ -151,7 +151,7 @@
 #define __SIW_ATTR_PERMISSION_ALL
 #endif
 
-#define __SIW_ATTR_RST_BY_READ
+#define SIW_ATTR_RST_BY_READ
 
 #define SIW_TOUCH_NAME				"siw_touch"
 #define SIW_TOUCH_CORE				"siw_touch_core"
@@ -161,7 +161,7 @@
 #define MAX_FINGER					10
 #define MAX_LPWG_CODE				128
 
-enum _SIW_CHIP_TYPE {
+enum SIW_CHIP_TYPE {
 	CHIP_NONE		= 0x0000,
 	//
 	CHIP_LG4894		= 0x0001,
@@ -199,5 +199,5 @@ enum _SIW_CHIP_TYPE {
 #define subsys_system_register(_subsys, _group)	bus_register(_subsys)
 #endif
 
-#endif	/* __SIW_TOUCH_CFG_H */
+#endif	/* SIW_TOUCH_CFG_H */
 

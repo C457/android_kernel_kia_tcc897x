@@ -47,7 +47,7 @@ static ssize_t mip4_ts_dev_fs_write(struct file *fp, const char *wbuf, size_t cn
 	if ((buf == NULL) || copy_from_user(buf, wbuf, cnt)) {
 		dev_err(&info->client->dev, "%s [ERROR] copy_from_user\n", __func__);
 		ret = -EIO;
-		goto exit;
+		goto mip4_exit;
 	}
 
 	cmd = buf[cnt - 1];
@@ -63,10 +63,10 @@ static ssize_t mip4_ts_dev_fs_write(struct file *fp, const char *wbuf, size_t cn
 			dev_err(&info->client->dev, "%s [ERROR] mip4_ts_i2c_write\n", __func__);
 		}
 	} else {
-		goto exit;
+		goto mip4_exit;
 	}
 
-exit:
+mip4_exit:
 	kfree(buf);
 
 	//dev_dbg(&info->client->dev, "%s [DONE]\n", __func__);
@@ -207,10 +207,10 @@ static int mip4_ts_proc_table_data(struct mip4_ts_info *info, u8 data_type_size,
 					uValue = (u8)rbuf[i_col];
 					break;
 				case 2:
-					uValue = (u16)(rbuf[data_type_size * i_col] | (rbuf[data_type_size * i_col + 1] << 8));
+					uValue = (u16)(rbuf[data_type_size * i_col] | (rbuf[(data_type_size * i_col) + 1] << 8));
 					break;
 				case 4:
-					uValue = (u32)(rbuf[data_type_size * i_col] | (rbuf[data_type_size * i_col + 1] << 8) | (rbuf[data_type_size * i_col + 2] << 16) | (rbuf[data_type_size * i_col + 3] << 24));
+					uValue = (u32)(rbuf[data_type_size * i_col] | (rbuf[(data_type_size * i_col) + 1] << 8) | (rbuf[(data_type_size * i_col) + 2] << 16) | (rbuf[(data_type_size * i_col) + 3] << 24));
 					break;
 				default:
 					dev_err(&info->client->dev, "%s [ERROR] data_type_size[%d]\n", __func__, data_type_size);
@@ -224,10 +224,10 @@ static int mip4_ts_proc_table_data(struct mip4_ts_info *info, u8 data_type_size,
 					sValue = (s8)rbuf[i_col];
 					break;
 				case 2:
-					sValue = (s16)(rbuf[data_type_size * i_col] | (rbuf[data_type_size * i_col + 1] << 8));
+					sValue = (s16)(rbuf[data_type_size * i_col] | (rbuf[(data_type_size * i_col) + 1] << 8));
 					break;
 				case 4:
-					sValue = (s32)(rbuf[data_type_size * i_col] | (rbuf[data_type_size * i_col + 1] << 8) | (rbuf[data_type_size * i_col + 2] << 16) | (rbuf[data_type_size * i_col + 3] << 24));
+					sValue = (s32)(rbuf[data_type_size * i_col] | (rbuf[(data_type_size * i_col) + 1] << 8) | (rbuf[(data_type_size * i_col) + 2] << 16) | (rbuf[(data_type_size * i_col) + 3] << 24));
 					break;
 				default:
 					dev_err(&info->client->dev, "%s [ERROR] data_type_size[%d]\n", __func__, data_type_size);
@@ -238,10 +238,10 @@ static int mip4_ts_proc_table_data(struct mip4_ts_info *info, u8 data_type_size,
 
 			switch (rotate) {
 			case 0:
-				info->image_buf[i_row * col_num + i_col] = value;
+				info->image_buf[(i_row * col_num) + i_col] = value;
 				break;
 			case 1:
-				info->image_buf[i_col * row_num + (row_num - 1 - i_row)] = value;
+				info->image_buf[(i_col * row_num) + (row_num - 1 - i_row)] = value;
 				break;
 			default:
 				dev_err(&info->client->dev, "%s [ERROR] rotate[%d]\n", __func__, rotate);
@@ -303,16 +303,16 @@ static int mip4_ts_proc_table_data(struct mip4_ts_info *info, u8 data_type_size,
 		for (i_x = 0; i_x < max_x; i_x++) {
 			switch (data_type_size) {
 			case 1:
-				printk(" %3d", info->image_buf[i_y * max_x + i_x]);
-				snprintf(data, sizeof(data), " %3d", info->image_buf[i_y * max_x + i_x]);
+				printk(" %3d", info->image_buf[(i_y * max_x) + i_x]);
+				snprintf(data, sizeof(data), " %3d", info->image_buf[(i_y * max_x) + i_x]);
 				break;
 			case 2:
-				printk(" %5d", info->image_buf[i_y * max_x + i_x]);
-				snprintf(data, sizeof(data), " %5d", info->image_buf[i_y * max_x + i_x]);
+				printk(" %5d", info->image_buf[(i_y * max_x) + i_x]);
+				snprintf(data, sizeof(data), " %5d", info->image_buf[(i_y * max_x) + i_x]);
 				break;
 			case 4:
-				printk(" %6d", info->image_buf[i_y * max_x + i_x]);
-				snprintf(data, sizeof(data), " %6d", info->image_buf[i_y * max_x + i_x]);
+				printk(" %6d", info->image_buf[(i_y * max_x) + i_x]);
+				snprintf(data, sizeof(data), " %6d", info->image_buf[(i_y * max_x) + i_x]);
 				break;
 			default:
 				dev_err(&info->client->dev, "%s [ERROR] data_type_size[%d]\n", __func__, data_type_size);
@@ -396,10 +396,10 @@ static int mip4_ts_proc_vector_data(struct mip4_ts_info *info, u8 data_type_size
 				uValue = (u8)rbuf[i];
 				break;
 			case 2:
-				uValue = (u16)(rbuf[data_type_size * i] | (rbuf[data_type_size * i + 1] << 8));
+				uValue = (u16)(rbuf[data_type_size * i] | (rbuf[(data_type_size * i) + 1] << 8));
 				break;
 			case 4:
-				uValue = (u32)(rbuf[data_type_size * i] | (rbuf[data_type_size * i + 1] << 8) | (rbuf[data_type_size * i + 2] << 16) | (rbuf[data_type_size * i + 3] << 24));
+				uValue = (u32)(rbuf[data_type_size * i] | (rbuf[(data_type_size * i) + 1] << 8) | (rbuf[(data_type_size * i) + 2] << 16) | (rbuf[(data_type_size * i) + 3] << 24));
 				break;
 			default:
 				dev_err(&info->client->dev, "%s [ERROR] data_type_size[%d]\n", __func__, data_type_size);
@@ -413,10 +413,10 @@ static int mip4_ts_proc_vector_data(struct mip4_ts_info *info, u8 data_type_size
 				sValue = (s8)rbuf[i];
 				break;
 			case 2:
-				sValue = (s16)(rbuf[data_type_size * i] | (rbuf[data_type_size * i + 1] << 8));
+				sValue = (s16)(rbuf[data_type_size * i] | (rbuf[(data_type_size * i) + 1] << 8));
 				break;
 			case 4:
-				sValue = (s32)(rbuf[data_type_size * i] | (rbuf[data_type_size * i + 1] << 8) | (rbuf[data_type_size * i + 2] << 16) | (rbuf[data_type_size * i + 3] << 24));
+				sValue = (s32)(rbuf[data_type_size * i] | (rbuf[(data_type_size * i) + 1] << 8) | (rbuf[(data_type_size * i) + 2] << 16) | (rbuf[(data_type_size * i) + 3] << 24));
 				break;
 			default:
 				dev_err(&info->client->dev, "%s [ERROR] data_type_size[%d]\n", __func__, data_type_size);
@@ -714,8 +714,8 @@ int mip4_ts_run_test(struct mip4_ts_info *info, u8 test_type)
 			goto error;
 		}
 		for (i = 0; i < vector_num; i++) {
-			vector_id[i] = rbuf[i * 4 + 0] | (rbuf[i * 4 + 1] << 8);
-			vector_elem_num[i] = rbuf[i * 4 + 2] | (rbuf[i * 4 + 3] << 8);
+			vector_id[i] = rbuf[(i * 4) + 0] | (rbuf[(i * 4) + 1] << 8);
+			vector_elem_num[i] = rbuf[(i * 4) + 2] | (rbuf[(i * 4) + 3] << 8);
 			dev_dbg(&info->client->dev, "%s - vector[%d] : id[%d] elem_num[%d]\n", __func__, i, vector_id[i], vector_elem_num[i]);
 		}
 	}
@@ -783,12 +783,12 @@ int mip4_ts_run_test(struct mip4_ts_info *info, u8 test_type)
 
 	dev_dbg(&info->client->dev, "%s - set normal mode\n", __func__);
 
-	goto exit;
+	goto mip4_exit;
 
 error:
 	ret = 1;
 
-exit:
+mip4_exit:
 	mip4_ts_restart(info);
 
 	/* enable touch event */
@@ -955,7 +955,7 @@ int mip4_ts_get_image(struct mip4_ts_info *info, u8 image_type)
 			goto error;
 		}
 		for (i = 0; i < vector_num; i++) {
-			vector_id[i] = rbuf[i * 4 + 0] | (rbuf[i * 4 + 1] << 8);
+			vector_id[i] = rbuf[(i * 4) + 0] | (rbuf[(i * 4) + 1] << 8);
 			vector_elem_num[i] = rbuf[i * 4 + 2] | (rbuf[i * 4 + 3] << 8);
 			dev_dbg(&info->client->dev, "%s - vector[%d] : id[%d] elem_num[%d]\n", __func__, i, vector_id[i], vector_elem_num[i]);
 		}
@@ -1011,12 +1011,12 @@ int mip4_ts_get_image(struct mip4_ts_info *info, u8 image_type)
 		memcpy(info->debug_buf, info->print_buf, PAGE_SIZE);
 	}
 
-	goto exit;
+	goto mip4_exit;
 
 error:
 	ret = 1;
 
-exit:
+mip4_exit:
 	/* enable touch event */
 	wbuf[0] = MIP4_R0_CTRL;
 	wbuf[1] = MIP4_R1_CTRL_EVENT_TRIGGER_TYPE;
@@ -1147,11 +1147,17 @@ static ssize_t mip4_ts_sys_fw_path_store(struct device *dev, struct device_attri
 	kfree(path);
 
 	dev_dbg(&info->client->dev, "%s [DONE]\n", __func__);
-	return count;
+	if(count < INT_MAX)
+                return count;
+        else
+                return INT_MAX;
 
 error:
 	dev_err(&info->client->dev, "%s [ERROR]\n", __func__);
-	return count;
+	if(count < INT_MAX)
+                return count;
+        else
+                return INT_MAX;
 }
 
 /*
@@ -1409,11 +1415,17 @@ static ssize_t mip4_ts_sys_mode_store(struct device *dev, struct device_attribut
 	}
 
 	dev_dbg(&info->client->dev, "%s [DONE]\n", __func__);
-	return count;
+	if(count < INT_MAX)
+                return count;
+        else
+                return INT_MAX;
 
 error:
 	dev_err(&info->client->dev, "%s [ERROR]\n", __func__);
-	return count;
+	if(count < INT_MAX)
+                return count;
+        else
+                return INT_MAX;
 }
 
 /*
@@ -1450,7 +1462,7 @@ static ssize_t mip4_ts_sys_mode_show(struct device *dev, struct device_attribute
 	} else {
 		dev_err(&info->client->dev, "%s [ERROR] Unknown mode[%s]\n", __func__, attr->attr.name);
 		snprintf(data, sizeof(data), "%s : Unknown Mode\n", attr->attr.name);
-		goto exit;
+		goto mip4_exit;
 	}
 
 	if (mip4_ts_i2c_read(info, wbuf, 2, rbuf, 1)) {
@@ -1463,7 +1475,7 @@ static ssize_t mip4_ts_sys_mode_show(struct device *dev, struct device_attribute
 
 	dev_dbg(&info->client->dev, "%s [DONE]\n", __func__);
 
-exit:
+mip4_exit:
 	ret = snprintf(buf, 255, "%s\n", data);
 	return ret;
 }
@@ -1627,7 +1639,7 @@ static ssize_t mip4_ts_sys_test_short(struct device *dev, struct device_attribut
 
 	for (iy = 0; iy < size; iy++) {
 		for (ix = (iy + 1); ix < size; ix++) {
-			idx = iy * size + ix;
+			idx = (iy * size) + ix;
 
 			if (info->image_buf[idx] != 255) {
 				cnt++;

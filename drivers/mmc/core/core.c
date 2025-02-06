@@ -2375,19 +2375,37 @@ static int mmc_rescan_try_freq(struct mmc_host *host, unsigned freq)
 	 * sdio_reset sends CMD52 to reset card.  Since we do not know
 	 * if the card is being re-initialized, just send it.  CMD52
 	 * should be ignored by SD/eMMC cards.
+     * Skip it if we already know that we do not support SDIO commands
 	 */
-	sdio_reset(host);
+//	sdio_reset(host);
+	if (!(host->caps2 & MMC_CAP2_NO_SDIO))
+		sdio_reset(host);
+
+
 	mmc_go_idle(host);
 
-	mmc_send_if_cond(host, host->ocr_avail);
+//	mmc_send_if_cond(host, host->ocr_avail);
+	if (!(host->caps2 & MMC_CAP2_NO_SD))
+		mmc_send_if_cond(host, host->ocr_avail);
 
 	/* Order's important: probe SDIO, then SD, then MMC */
-	if (!mmc_attach_sdio(host))
-		return 0;
-	if (!mmc_attach_sd(host))
-		return 0;
-	if (!mmc_attach_mmc(host))
-		return 0;
+//	if (!mmc_attach_sdio(host))
+//		return 0;
+	if (!(host->caps2 & MMC_CAP2_NO_SDIO))
+		if (!mmc_attach_sdio(host))
+			return 0;
+
+//	if (!mmc_attach_sd(host))
+//		return 0;
+	if (!(host->caps2 & MMC_CAP2_NO_SD))
+		if (!mmc_attach_sd(host))
+			return 0;
+
+//	if (!mmc_attach_mmc(host))
+//		return 0;
+	if (!(host->caps2 & MMC_CAP2_NO_MMC))
+		if (!mmc_attach_mmc(host))
+			return 0;
 
     // host->index = 2, SD Card
     if((host->index != 2) || (freq == 100000))

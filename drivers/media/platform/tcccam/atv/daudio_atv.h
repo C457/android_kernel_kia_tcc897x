@@ -143,7 +143,7 @@ extern struct capture_size sensor_sizes[];
 extern struct sensor_reg *sensor_reg_common[];
 extern void sensor_info_init(TCC_SENSOR_INFO_TYPE *sensor_info);
 extern void sensor_init_fnc(SENSOR_FUNC_TYPE *sensor_func);
-#if defined(CONFIG_BOARD3HW_GPIO)
+#if defined(INCLUDE_BOARD3HW_GPIO)
 extern void tw9990_sensor_init_fnc(SENSOR_FUNC_TYPE_DAUDIO *sensor_func);
 extern void lvds_sensor_init_fnc(SENSOR_FUNC_TYPE_DAUDIO *sensor_func);
 #else

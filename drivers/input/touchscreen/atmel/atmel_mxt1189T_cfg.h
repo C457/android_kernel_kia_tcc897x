@@ -1,5 +1,5 @@
-#ifndef __ATMEL_MXT1189T_CFG_H
-#define __ATMEL_MXT1189T_CFG_H
+#ifndef ATMEL_MXT1189T_CFG_H
+#define ATMEL_MXT1189T_CFG_H
 
 #if defined(INCLUDE_LCD_TOUCHKEY) //touchkey
 
@@ -210,4 +210,4 @@ unsigned char cfg_1189T_T104[11] = {0, 20, 50, 15, 25, 10, 19, 50, 15, 25,
 								   };
 
 #endif
-#endif  /* __ATMEL_MXT1189T_CFG_H */
+#endif  /* ATMEL_MXT1189T_CFG_H */

@@ -9,8 +9,8 @@
  * version 2 as published by the Free Software Foundation.
  */
 
-#ifndef __SIW_TOUCH_EVENT_H
-#define __SIW_TOUCH_EVENT_H
+#ifndef SIW_TOUCH_EVENT_H
+#define SIW_TOUCH_EVENT_H
 
 extern void siw_touch_report_event(void *ts_data);
 extern void siw_touch_report_all_event(void *ts_data);
@@ -22,5 +22,5 @@ extern void siw_touch_free_uevent(void *ts_data);
 extern int siw_touch_init_input(void *ts_data);
 extern void siw_touch_free_input(void *ts_data);
 
-#endif	/* __SIW_TOUCH_EVENT_H */
+#endif	/* SIW_TOUCH_EVENT_H */
 

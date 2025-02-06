@@ -137,7 +137,7 @@ static int siw_touch_spi_init(struct device *dev)
 		return ret;
 	}
 
-#if !defined(__SIW_CONFIG_OF)
+#if !defined(SIW_CONFIG_OF)
 	spi->chip_select = touch_chip_select(ts);
 #endif
 	spi->bits_per_word = new_bits;
@@ -477,7 +477,7 @@ int siw_touch_spi_add_driver(void *data)
 	spi_drv = &bus_drv->bus.spi_drv;
 	spi_drv->driver.name = drv_name;
 	spi_drv->driver.owner = pdata->owner;
-#if defined(__SIW_CONFIG_OF)
+#if defined(SIW_CONFIG_OF)
 	spi_drv->driver.of_match_table = pdata->of_match_table;
 #endif
 	spi_drv->driver.pm = DEV_PM_OPS;

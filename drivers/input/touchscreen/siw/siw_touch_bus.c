@@ -85,7 +85,7 @@ void siw_touch_bus_tr_data_free(struct siw_ts *ts)
 #define TOUCH_PINCTRL_ACTIVE	"touch_pin_active"
 #define TOUCH_PINCTRL_SLEEP		"touch_pin_sleep"
 
-#if defined(__SIW_SUPPORT_PINCTRL)	//See siw_touch_cfg.h
+#if defined(SIW_SUPPORT_PINCTRL)	//See siw_touch_cfg.h
 int siw_touch_bus_pin_get(struct siw_ts *ts)
 {
 	struct device *dev = ts->dev;
@@ -161,7 +161,7 @@ int siw_touch_bus_pin_put(struct siw_ts *ts)
 out:
 	return 0;
 }
-#else	/* __SIW_SUPPORT_PINCTRL */
+#else	/* SIW_SUPPORT_PINCTRL */
 int siw_touch_bus_pin_get(struct siw_ts *ts)
 {
 	struct device *dev = ts->dev;
@@ -177,7 +177,7 @@ int siw_touch_bus_pin_put(struct siw_ts *ts)
 	t_dev_info(dev, "put pinctrl, nop ...\n");
 	return 0;
 }
-#endif	/* __SIW_SUPPORT_PINCTRL */
+#endif	/* SIW_SUPPORT_PINCTRL */
 
 void *siw_touch_bus_create_bus_drv(int bus_type)
 {
@@ -211,7 +211,7 @@ void siw_touch_bus_free_bus_pdata(void *pdata)
 	kfree(pdata);
 }
 
-static void *__buffer_alloc(struct device *dev, size_t size,
+static void *buffer_alloc(struct device *dev, size_t size,
 				dma_addr_t *dma_handle, gfp_t gfp,
 				char *name)
 {
@@ -246,7 +246,7 @@ static void *__buffer_alloc(struct device *dev, size_t size,
 	return buf;
 }
 
-static void __buffer_free(struct device *dev, size_t size,
+static void buffer_free(struct device *dev, size_t size,
 				void *buf, dma_addr_t dma_handle,
 				char *name)
 {
@@ -278,7 +278,7 @@ static void siw_touch_buf_free(struct siw_ts *ts, int _tx)
 
 	for (i = 0; i < SIW_TOUCH_MAX_BUF_IDX; i++) {
 		sprintf(name, "%s%d", title, i);
-		__buffer_free(dev, t_buf->size,
+		buffer_free(dev, t_buf->size,
 				t_buf->buf, t_buf->dma, name);
 		t_buf++;
 	}
@@ -304,7 +304,7 @@ static int siw_touch_buf_alloc(struct siw_ts *ts, int _tx)
 
 	for (i = 0; i < SIW_TOUCH_MAX_BUF_IDX; i++) {
 		sprintf(name, "%s%d", title, i);
-		buf = __buffer_alloc(dev, buf_size, &dma,
+		buf = buffer_alloc(dev, buf_size, &dma,
 					GFP_KERNEL | GFP_DMA, name);
 		if (!buf) {
 			goto out;
@@ -473,7 +473,7 @@ static const struct siw_op_dbg siw_bus_init_ops[2][2] = {
 
 #define SIW_BUS_MAX		(sizeof(siw_bus_init_ops) / sizeof(siw_bus_init_ops[0]))
 
-static int __siw_touch_bus_add_chk(struct siw_touch_chip_data *chip_data)
+static int siw_touch_bus_add_chk(struct siw_touch_chip_data *chip_data)
 {
 	int bus_type;
 
@@ -496,19 +496,19 @@ static int __siw_touch_bus_add_chk(struct siw_touch_chip_data *chip_data)
 	return 0;
 }
 
-static int __siw_touch_bus_add_op(
+static int siw_touch_bus_add_op(
 					struct siw_touch_chip_data *chip_data,
 					void *op_func)
 {
 	struct siw_op_dbg *op = op_func;
 	int ret = 0;
 
-	ret = __siw_touch_bus_add_chk(chip_data);
+	ret = siw_touch_bus_add_chk(chip_data);
 	if (ret)
 		goto out;
 
 //	t_pr_info("%s\n", op->name);
-	ret = __siw_touch_op_dbg(op, chip_data);
+	ret = siw_touch_op_dbg(op, chip_data);
 	if (ret) {
 		t_pr_err("%s failed, %d\n", op->name, ret);
 		goto out;
@@ -518,20 +518,20 @@ out:
 	return ret;
 }
 
-static int __siw_touch_bus_add_driver(struct siw_touch_chip_data *chip_data, int on_off)
+static int ori_siw_touch_bus_add_driver(struct siw_touch_chip_data *chip_data, int on_off)
 {
-	return __siw_touch_bus_add_op(chip_data,
+	return siw_touch_bus_add_op(chip_data,
 			(void *)&siw_bus_init_ops[chip_data->pdata->bus_info.bus_type][on_off]);
 }
 
 int siw_touch_bus_add_driver(struct siw_touch_chip_data *chip_data)
 {
-	return __siw_touch_bus_add_driver(chip_data, DRIVER_INIT);
+	return ori_siw_touch_bus_add_driver(chip_data, DRIVER_INIT);
 }
 
 int siw_touch_bus_del_driver(struct siw_touch_chip_data *chip_data)
 {
-	return __siw_touch_bus_add_driver(chip_data, DRIVER_FREE);
+	return ori_siw_touch_bus_add_driver(chip_data, DRIVER_FREE);
 }
 
 static int siw_touch_bus_do_pm_suspend(struct device *dev)

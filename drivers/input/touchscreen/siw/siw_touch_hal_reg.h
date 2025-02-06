@@ -9,8 +9,8 @@
  * version 2 as published by the Free Software Foundation.
  */
 
-#ifndef __SIW_TOUCH_HAL_REG_H
-#define __SIW_TOUCH_HAL_REG_H
+#ifndef SIW_TOUCH_HAL_REG_H
+#define SIW_TOUCH_HAL_REG_H
 
 #include "siw_touch_cfg.h"
 
@@ -160,7 +160,7 @@
 /* __SIW_SUPPORT_WATCH */
 
 
-/* __SIW_SUPPORT_PRD */
+/* SIW_SUPPORT_PRD */
 #define PRD_SERIAL_TCM_OFFSET		(0x07C)
 #define PRD_TC_MEM_SEL				(0x457)
 #define PRD_TC_TEST_MODE_CTL		(0xC6E)
@@ -173,7 +173,7 @@
 #define GLOVE_EN					(0xF22)
 #define GRAB_EN						(0xF24)
 
-/* __SIW_SUPPORT_PRD */
+/* SIW_SUPPORT_PRD */
 
 struct siw_hal_reg {
 	u32 spr_chip_test;
@@ -281,7 +281,7 @@ struct siw_hal_reg {
 	u32 ext_watch_position_r;
 	u32 ext_watch_state;
 	u32 sys_dispmode_status;
-	/* __SIW_SUPPORT_PRD */
+	/* SIW_SUPPORT_PRD */
 	u32 prd_serial_tcm_offset;
 	u32 prd_tc_mem_sel;
 	u32 prd_tc_test_mode_ctl;
@@ -304,6 +304,6 @@ struct siw_hal_reg_quirk {
 	u32 new_addr;
 };
 
-#endif	/* __SIW_TOUCH_HAL_REG_H */
+#endif	/* SIW_TOUCH_HAL_REG_H */
 
 

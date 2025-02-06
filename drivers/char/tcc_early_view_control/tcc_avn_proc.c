@@ -48,6 +48,7 @@ typedef enum {
 	GET_CAM_TYPE		= 0x53,
 	SET_HANDOVER_PROPERTY   = 0x54,
 	GET_HANDOVER_PROPERTY   = 0x55,
+	GET_CAM_MODE_GPIO       = 0x56,
 } CM_AVN_CMD;
 
 int	pinGear;
@@ -55,6 +56,7 @@ int	pinActive;
 static int handover_property = 1;
 
 extern int get_camera_type(void);
+extern int gpio_get_camera_variant(void);
 
 void tcc_cm_ctrl_print_earlycamera_log(void)
 {
@@ -121,6 +123,10 @@ EXPORT_SYMBOL_GPL(tcc_cm_ctrl_get_gear_status);
 
 int tcc_cm_ctrl_camera_type_check(void) {
 	return get_camera_type();
+}
+
+int tcc_cm_ctrl_camera_mode_gpio(void) {
+	return gpio_get_camera_variant();
 }
 
 int tcc_cm_ctrl_stop_earlycamera(void) {
@@ -251,6 +257,10 @@ int CM_AVN_Proc(unsigned long arg) {
 
 		case GET_HANDOVER_PROPERTY:
 			msg = handover_property;
+			break;
+
+		case GET_CAM_MODE_GPIO:
+			msg = tcc_cm_ctrl_camera_mode_gpio();
 			break;
 
 		default:

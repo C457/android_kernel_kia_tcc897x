@@ -72,14 +72,14 @@ int fat_clusters_flush(struct super_block *sb)
 
 	bh = sb_bread(sb, sbi->fsinfo_sector);
 	if (bh == NULL) {
-		fat_msg(sb, KERN_ERR, "bread failed in fat_clusters_flush");
+		fat_msg_ratelimit(sb, KERN_ERR, "bread failed in fat_clusters_flush");
 		return -EIO;
 	}
 
 	fsinfo = (struct fat_boot_fsinfo *)bh->b_data;
 	/* Sanity check */
 	if (!IS_FSINFO(fsinfo)) {
-		fat_msg(sb, KERN_ERR, "Invalid FSINFO signature: "
+		fat_msg_ratelimit(sb, KERN_ERR, "Invalid FSINFO signature: "
 		       "0x%08x, 0x%08x (sector = %lu)",
 		       le32_to_cpu(fsinfo->signature1),
 		       le32_to_cpu(fsinfo->signature2),
@@ -154,7 +154,7 @@ int fat_chain_add(struct inode *inode, int new_dclus, int nr_cluster)
 			mark_inode_dirty(inode);
 	}
 	if (new_fclus != (inode->i_blocks >> (sbi->cluster_bits - 9))) {
-		fat_fs_error(sb, "clusters badly computed (%d != %llu)",
+		fat_fs_error_ratelimit(sb, "clusters badly computed (%d != %llu)",
 			     new_fclus,
 			     (llu)(inode->i_blocks >> (sbi->cluster_bits - 9)));
 		fat_cache_inval_inode(inode);

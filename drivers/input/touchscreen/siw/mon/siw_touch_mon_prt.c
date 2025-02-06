@@ -75,10 +75,10 @@ struct siw_mon_reader_txt {
 		})
 
 #define siw_mon_prt_snprintf(_p, _fmt, _args...) \
-		__siw_mon_prt_snprintf(_p, __siw_mon_prt_margin, _fmt, ##_args)
+		__siw_mon_prt_snprintf(_p, siw_mon_prt_margin, _fmt, ##_args)
 
 #define siw_mon_prt_snprintf_finish(_p) \
-		__siw_mon_prt_snprintf(_p, __siw_mon_prt_margin_fin, "\n")
+		__siw_mon_prt_snprintf(_p, siw_mon_prt_margin_fin, "\n")
 
 
 #define SIW_MON_TIME_FORMAT				"%5ld.%06ld"
@@ -153,25 +153,25 @@ enum {
 	SIW_MON_PRT_MAX			= 16,
 };
 
-static int __siw_mon_prt_margin = SIW_MON_PRT_MARGIN;
-static int __siw_mon_prt_margin_fin = SIW_MON_PRT_MARGIN_FIN;
+static int siw_mon_prt_margin = SIW_MON_PRT_MARGIN;
+static int siw_mon_prt_margin_fin = SIW_MON_PRT_MARGIN_FIN;
 
 #if defined(__SIW_MON_EVENT_NO_LIMIT)
-static int __siw_mon_buf_max = 0;		//0 = limit off, else limit on
+static int var_siw_mon_buf_max = 0;		//0 = limit off, else limit on
 #else	/* __SIW_MON_EVENT_NO_LIMIT */
-static int __siw_mon_buf_max = SIW_MON_BUF_MAX;
+static int var_siw_mon_buf_max = SIW_MON_BUF_MAX;
 #endif	/* __SIW_MON_EVENT_NO_LIMIT */
 
-static int __siw_mon_prt_max = SIW_MON_PRT_MAX;
+static int var_siw_mon_prt_max = SIW_MON_PRT_MAX;
 
 int __used siw_mon_buf_max(void)
 {
-	return __siw_mon_buf_max;
+	return var_siw_mon_buf_max;
 }
 
 int __used siw_mon_prt_max(void)
 {
-	return __siw_mon_prt_max;
+	return var_siw_mon_prt_max;
 }
 
 enum {
@@ -184,7 +184,7 @@ struct siw_mon_debugfs_ctrl {
 	unsigned long fbit;
 };
 
-static struct siw_mon_debugfs_ctrl *__siw_mon_debugfs_ctrl = NULL;
+static struct siw_mon_debugfs_ctrl *var_siw_mon_debugfs_ctrl = NULL;
 
 #if 0
 #define SIW_MON_PRT_ATTR_TAG	"prt_attr: "
@@ -250,7 +250,7 @@ static int siw_mon_prt_init_files(struct siw_mon_debugfs_ctrl *ctrl)
 {
 	/* ignore error */
 
-	siw_mon_prt_create_file(ctrl, "_attr_prt_max", 0666, &__siw_mon_prt_max);
+	siw_mon_prt_create_file(ctrl, "_attr_prt_max", 0666, &var_siw_mon_prt_max);
 
 	return 0;
 }
@@ -392,7 +392,7 @@ static int siw_mon_prt_open(struct inode *inode, struct file *file)
 	struct siw_mon_reader_txt *rp;
 	int ret = 0;
 
-	mutex_lock(&__siw_mon_lock);
+	mutex_lock(&siw_mon_lock);
 
 	if (inode == NULL) {
 		mon_pr_err(SIW_MON_PRT_OPEN_TAG	\
@@ -453,7 +453,7 @@ static int siw_mon_prt_open(struct inode *inode, struct file *file)
 	mon_pr_dbg(SIW_MON_PRT_OPEN_TAG	\
 		"open file - mterm[%s]\n", mterm->name);
 
-	mutex_unlock(&__siw_mon_lock);
+	mutex_unlock(&siw_mon_lock);
 	return 0;
 
 // out_busy:
@@ -463,7 +463,7 @@ out_slab:
 out_alloc_pr:
 	kfree(rp);
 out_alloc:
-	mutex_unlock(&__siw_mon_lock);
+	mutex_unlock(&siw_mon_lock);
 	return ret;
 }
 
@@ -472,7 +472,7 @@ out_alloc:
  * [15:00] : adjusted total size by print limit
  * See 'siw_mon_submit_bus', 'siw_mon_submit_ops'
  */
-static int __siw_mon_txt_read_get_len(int size, int *total)
+static int siw_mon_txt_read_get_len(int size, int *total)
 {
 	int tot;
 	int len;
@@ -486,7 +486,7 @@ static int __siw_mon_txt_read_get_len(int size, int *total)
 	return siw_mon_buf_size_cur(size);	//adjusted total size by print limit
 }
 
-static int __siw_mon_txt_read_priv_idx(struct siw_mon_txt_ptr *p,
+static int siw_mon_txt_read_priv_idx(struct siw_mon_txt_ptr *p,
 			int priv, int total)
 {
 	int priv_main;
@@ -524,7 +524,7 @@ out:
 	return last;
 }
 
-static int __siw_mon_txt_read_prt_buf(struct siw_mon_txt_ptr *p,
+static int siw_mon_txt_read_prt_buf(struct siw_mon_txt_ptr *p,
 			unsigned char *buf, int size,
 			char *dir, int total)
 {
@@ -550,7 +550,7 @@ out:
 	return prt;
 }
 
-static void __siw_mon_txt_read_bus(struct siw_mon_reader_txt *rp,
+static void siw_mon_txt_read_bus(struct siw_mon_reader_txt *rp,
 			struct siw_mon_txt_ptr *p, struct siw_mon_event_txt *etxt)
 
 {
@@ -563,16 +563,16 @@ static void __siw_mon_txt_read_bus(struct siw_mon_reader_txt *rp,
 	p->cnt += siw_mon_prt_snprintf(p, "%s", bus->dir);
 
 	if (bus->tx_buf) {
-		len = __siw_mon_txt_read_get_len(bus->tx_size, &total);
-		last += __siw_mon_txt_read_priv_idx(p, bus->priv, total);
-		prt += __siw_mon_txt_read_prt_buf(p, bus->tx_buf, len, "T", total);
+		len = siw_mon_txt_read_get_len(bus->tx_size, &total);
+		last += siw_mon_txt_read_priv_idx(p, bus->priv, total);
+		prt += siw_mon_txt_read_prt_buf(p, bus->tx_buf, len, "T", total);
 		siw_mon_put_buf_cache(bus->tx_buf);
 	}
 
 	if (bus->rx_buf) {
-		len = __siw_mon_txt_read_get_len(bus->rx_size, &total);
-		last += __siw_mon_txt_read_priv_idx(p, bus->priv, total);
-		prt += __siw_mon_txt_read_prt_buf(p, bus->rx_buf, len, "R", total);
+		len = siw_mon_txt_read_get_len(bus->rx_size, &total);
+		last += siw_mon_txt_read_priv_idx(p, bus->priv, total);
+		prt += siw_mon_txt_read_prt_buf(p, bus->rx_buf, len, "R", total);
 		siw_mon_put_buf_cache(bus->rx_buf);
 	}
 
@@ -581,7 +581,7 @@ static void __siw_mon_txt_read_bus(struct siw_mon_reader_txt *rp,
 	}
 }
 
-static void __siw_mon_txt_read_evt(struct siw_mon_reader_txt *rp,
+static void siw_mon_txt_read_evt(struct siw_mon_reader_txt *rp,
 			struct siw_mon_txt_ptr *p, struct siw_mon_event_txt *etxt)
 
 {
@@ -598,7 +598,7 @@ static void __siw_mon_txt_read_evt(struct siw_mon_reader_txt *rp,
 					evt->value);
 }
 
-static int __siw_mon_txt_read_ops_sock(struct siw_mon_reader_txt *rp,
+static int siw_mon_txt_read_ops_sock(struct siw_mon_reader_txt *rp,
 			struct siw_mon_txt_ptr *p, struct siw_mon_event_txt *etxt)
 {
 	struct siw_mon_data_ops *ops = &etxt->data.d.ops;
@@ -619,9 +619,9 @@ static int __siw_mon_txt_read_ops_sock(struct siw_mon_reader_txt *rp,
 	buf = (unsigned char *)ops->data[0];
 	size = ops->data[1];
 
-	len = __siw_mon_txt_read_get_len(size, &total);
-	last += __siw_mon_txt_read_priv_idx(p, ops->priv, total);
-	prt += __siw_mon_txt_read_prt_buf(p, buf, len, NULL, 0);
+	len = siw_mon_txt_read_get_len(size, &total);
+	last += siw_mon_txt_read_priv_idx(p, ops->priv, total);
+	prt += siw_mon_txt_read_prt_buf(p, buf, len, NULL, 0);
 
 	if (prt && last) {
 		p->cnt += siw_mon_prt_snprintf(p, " ...");
@@ -632,7 +632,7 @@ static int __siw_mon_txt_read_ops_sock(struct siw_mon_reader_txt *rp,
 	return 0;
 }
 
-static void __siw_mon_txt_read_ops(struct siw_mon_reader_txt *rp,
+static void siw_mon_txt_read_ops(struct siw_mon_reader_txt *rp,
 			struct siw_mon_txt_ptr *p, struct siw_mon_event_txt *etxt)
 
 {
@@ -640,7 +640,7 @@ static void __siw_mon_txt_read_ops(struct siw_mon_reader_txt *rp,
 	int len = min(siw_mon_prt_max(), ops->len);
 	int i;
 
-	if (!__siw_mon_txt_read_ops_sock(rp, p, etxt)) {
+	if (!siw_mon_txt_read_ops_sock(rp, p, etxt)) {
 		return;
 	}
 
@@ -654,7 +654,7 @@ static void __siw_mon_txt_read_ops(struct siw_mon_reader_txt *rp,
 	}
 }
 
-static void __siw_mon_txt_read_x(struct siw_mon_reader_txt *rp,
+static void siw_mon_txt_read_x(struct siw_mon_reader_txt *rp,
 			struct siw_mon_txt_ptr *p, struct siw_mon_event_txt *etxt)
 
 {
@@ -666,16 +666,16 @@ static void siw_mon_txt_read_data(struct siw_mon_reader_txt *rp,
 {
 	switch (etxt->type) {
 	case SIW_MON_BUS:
-		__siw_mon_txt_read_bus(rp, p, etxt);
+		siw_mon_txt_read_bus(rp, p, etxt);
 		break;
 	case SIW_MON_EVT:
-		__siw_mon_txt_read_evt(rp, p, etxt);
+		siw_mon_txt_read_evt(rp, p, etxt);
 		break;
 	case SIW_MON_OPS:
-		__siw_mon_txt_read_ops(rp, p, etxt);
+		siw_mon_txt_read_ops(rp, p, etxt);
 		break;
 	default:
-		__siw_mon_txt_read_x(rp, p, etxt);
+		siw_mon_txt_read_x(rp, p, etxt);
 		break;
 	}
 
@@ -828,7 +828,7 @@ static int siw_mon_prt_release(struct inode *inode, struct file *file)
 	struct siw_mon_event_txt *etxt;
 	int ret = 0;
 
-	mutex_lock(&__siw_mon_lock);
+	mutex_lock(&siw_mon_lock);
 
 	if (!rp) {
 		mon_pr_err(SIW_MON_PRT_RELEASE_TAG	\
@@ -891,7 +891,7 @@ static int siw_mon_prt_release(struct inode *inode, struct file *file)
 		"release file - mterm[%s]\n", mterm->name);
 
 out:
-	mutex_unlock(&__siw_mon_lock);
+	mutex_unlock(&siw_mon_lock);
 	return ret;
 }
 
@@ -913,12 +913,12 @@ int siw_mon_prt_add(struct siw_mon_term *mterm, char *name)
 	char fname[NAMESZ];
 	int ret = 0;
 
-	if (__siw_mon_debugfs_ctrl == NULL) {
+	if (var_siw_mon_debugfs_ctrl == NULL) {
 		mon_pr_warn(SIW_MON_PRT_ADD_TAG	\
 			"unable to create file : NULL ctrl\n");
 		return 0;
 	}
-	mroot = __siw_mon_debugfs_ctrl->root;
+	mroot = var_siw_mon_debugfs_ctrl->root;
 
 	if (mroot == NULL) {
 		mon_pr_warn(SIW_MON_PRT_ADD_TAG	\
@@ -932,7 +932,7 @@ int siw_mon_prt_add(struct siw_mon_term *mterm, char *name)
 	}
 
 	ret = snprintf(fname, NAMESZ, "%s", name);
-	if (ret <= 0 || ret >= NAMESZ) {
+	if ((ret <= 0) || (ret >= NAMESZ)) {
 		mon_pr_err(SIW_MON_PRT_ADD_TAG \
 			"failed to arrange file name[%s]\n", name);
 		goto out;
@@ -984,7 +984,7 @@ int siw_mon_prt_init(void)
 
 	ctrl->root = mroot;
 
-	__siw_mon_debugfs_ctrl = ctrl;
+	var_siw_mon_debugfs_ctrl = ctrl;
 
 	siw_mon_prt_init_files(ctrl);
 
@@ -993,7 +993,7 @@ int siw_mon_prt_init(void)
 
 void siw_mon_prt_exit(void)
 {
-	struct siw_mon_debugfs_ctrl *ctrl = __siw_mon_debugfs_ctrl;
+	struct siw_mon_debugfs_ctrl *ctrl = var_siw_mon_debugfs_ctrl;
 	struct dentry *mroot;
 
 	if (!ctrl)
@@ -1008,6 +1008,6 @@ void siw_mon_prt_exit(void)
 	debugfs_remove_recursive(mroot);
 
 	kfree(ctrl);
-	__siw_mon_debugfs_ctrl = NULL;
+	var_siw_mon_debugfs_ctrl = NULL;
 }
 

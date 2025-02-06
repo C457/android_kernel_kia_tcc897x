@@ -1886,14 +1886,20 @@ static ssize_t __abt_store_tool(struct device *dev,
 
 	if (atomic_read(&ts->state.debug_tool) != DEBUG_TOOL_ENABLE){
 		t_abt_err(abt, "tool disabled\n");
-		return count;
+		if(count < INT_MAX)
+	                return count;
+	        else
+	                return INT_MAX;
 	}
 
 	if (opt) {
 		ip = __ip;
 		if (sscanf(buf, "%d %s", &mode, ip) <= 0) {
 			siw_abt_sysfs_err_invalid_param(abt);
-			return count;
+			if(count < INT_MAX)
+	        	        return count;
+		        else
+		                return INT_MAX;
 		}
 	} else {
 		mode = buf[0];
@@ -1906,7 +1912,10 @@ static ssize_t __abt_store_tool(struct device *dev,
 	if (mode && mode < STORE_ABT_MODE_MAX) {
 		if (!ip[0] || (ip[0] == '0')) {
 			t_abt_err(abt, "Invalid IP\n");
-			return count;
+			if(count < INT_MAX)
+	                	return count;
+	        	else
+		                return INT_MAX;
 		}
 	}
 
@@ -1940,7 +1949,10 @@ static ssize_t __abt_store_tool(struct device *dev,
 		}
 	}
 
-	return count;
+	if(count < INT_MAX)
+                return count;
+        else
+                return INT_MAX;
 }
 
 /*
@@ -2166,7 +2178,7 @@ void siw_hal_switch_to_abt_irq_handler(struct siw_ts *ts)
 #endif
 
 #define SIW_TOUCH_HAL_ABT_ATTR(_name, _show, _store)	\
-		__TOUCH_ATTR(_name, __TOUCH_ABT_PERM, _show, _store)
+		DEF_TOUCH_ATTR(_name, __TOUCH_ABT_PERM, _show, _store)
 
 #define _SIW_TOUCH_HAL_ABT_T(_name)	\
 		touch_attr_##_name
@@ -2358,9 +2370,9 @@ int siw_hal_abt_sysfs(struct device *dev, int on_off)
 
 }
 
-__siw_setup_u32("siw_abt_port_default=", abt_setup_port_default, t_abt_port_default);
-__siw_setup_u32("siw_abt_port_tcp=", abt_setup_port_tcp, t_abt_port_tcp);
-__siw_setup_u32("siw_abt_port_send=", abt_setup_port_send, t_abt_port_send);
+def_siw_setup_u32("siw_abt_port_default=", abt_setup_port_default, t_abt_port_default);
+def_siw_setup_u32("siw_abt_port_tcp=", abt_setup_port_tcp, t_abt_port_tcp);
+def_siw_setup_u32("siw_abt_port_send=", abt_setup_port_send, t_abt_port_send);
 
 #endif	/* __SIW_SUPPORT_ABT */
 

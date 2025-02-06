@@ -201,7 +201,7 @@ void siw_touch_gpio_set_pull(struct device *dev, int pin, int value)
 	siw_touch_gpio_do_set_pull(dev, pin, value);
 }
 
-#if defined(__SIW_SUPPORT_PWRCTRL)
+#if defined(SIW_SUPPORT_PWRCTRL)
 static int siw_touch_power_do_init(struct device *dev)
 {
 	struct siw_ts *ts = to_touch_core(dev);
@@ -345,7 +345,7 @@ static void siw_touch_power_do_vio(struct device *dev, int value)
 	if (ret)
 		t_dev_err(dev, "vio - %s, %d", op, ret);
 }
-#else	/* __SIW_SUPPORT_PWRCTRL */
+#else	/* SIW_SUPPORT_PWRCTRL */
 static int siw_touch_power_do_init(struct device *dev)
 {
 	t_dev_dbg_gpio(dev, "power init, nop ...\n");
@@ -369,7 +369,7 @@ static void siw_touch_power_do_vio(struct device *dev, int value)
 {
 
 }
-#endif	/* __SIW_SUPPORT_PWRCTRL */
+#endif	/* SIW_SUPPORT_PWRCTRL */
 
 int siw_touch_power_init(struct device *dev)
 {

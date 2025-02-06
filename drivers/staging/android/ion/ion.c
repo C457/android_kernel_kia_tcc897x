@@ -1610,6 +1610,8 @@ struct ion_device *ion_device_create(long (*custom_ioctl)
 	if (!idev->clients_debug_root)
 		pr_err("ion: failed to create debugfs clients directory.\n");
 
+	pr_info("ion: ion_system_heap order : 1\n");
+
 debugfs_done:
 
 	idev->custom_ioctl = custom_ioctl;

@@ -402,6 +402,7 @@ int mali_module_init(void)
 	MALI_PRINT( ("Inserting Mali v%d device driver. \n",_MALI_API_VERSION));
 	MALI_PRINT( ("Compiled: %s, time: %s.\n", __DATE__, __TIME__));
 	MALI_PRINT( ("Driver revision: %s\n", SVN_REV_STRING));
+	MALI_PRINT( ("Patch : Workaround 860276\n"));
 
 #if MALI_ENABLE_CPU_CYCLES
 	mali_init_cpu_time_counters_on_all_cpus(0);

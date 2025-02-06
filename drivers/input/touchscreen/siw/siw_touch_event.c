@@ -40,10 +40,10 @@
 
 
 #if defined(CONFIG_ANDROID)
-#define __SIW_CONFIG_INPUT_ANDROID
+#define SIW_CONFIG_INPUT_ANDROID
 #endif
 
-#define __siw_input_report_key(_idev, _code, _value)	\
+#define def_siw_input_report_key(_idev, _code, _value)	\
 	do {	\
 		if (t_dbg_flag & DBG_FLAG_SKIP_IEVENT) {	\
 			t_dev_dbg_event(&_idev->dev, "skip input report: c %d, v %d\n", _code, _value);	\
@@ -54,12 +54,12 @@
 
 #define siw_input_report_key(_idev, _code, _value)	\
 	do {	\
-		__siw_input_report_key(_idev, _code, _value);	\
+		def_siw_input_report_key(_idev, _code, _value);	\
 		siwmon_submit_evt(&_idev->dev, "EV_KEY", EV_KEY, #_code, _code, _value, 0);	\
 	} while (0)
 
 
-#define __siw_input_report_abs(_idev, _code, _value)	\
+#define def_siw_input_report_abs(_idev, _code, _value)	\
 	do {	\
 		if (t_dbg_flag & DBG_FLAG_SKIP_IEVENT) {	\
 			t_dev_dbg_event(&_idev->dev, "skip input report: c %d, v %d\n", _code, _value);	\
@@ -70,7 +70,7 @@
 
 #define siw_input_report_abs(_idev, _code, _value)	\
 	do {	\
-		__siw_input_report_abs(_idev, _code, _value);	\
+		def_siw_input_report_abs(_idev, _code, _value);	\
 		siwmon_submit_evt(&_idev->dev, "EV_ABS", EV_ABS, #_code, _code, _value, 0);	\
 	} while (0)
 
@@ -88,11 +88,11 @@ static void siw_touch_report_cancel_event(struct siw_ts *ts)
 	for (i = 0; i < touch_max_finger(ts); i++) {
 		if (old_mask & (1 << i)) {
 			input_mt_slot(input, i);
-		#if defined(__SIW_CONFIG_INPUT_ANDROID)
+		#if defined(SIW_CONFIG_INPUT_ANDROID)
 			input_mt_report_slot_state(input, MT_TOOL_FINGER, true);
 			siw_input_report_key(input, BTN_TOUCH, 1);
 			siw_input_report_key(input, BTN_TOOL_FINGER, 1);
-		#endif	/* __SIW_CONFIG_INPUT_ANDROID */
+		#endif	/* SIW_CONFIG_INPUT_ANDROID */
 			siw_input_report_abs(input, ABS_MT_PRESSURE, 255);
 			t_dev_info(ts->dev, "%s: finger canceled <%d> (%4d, %4d, %4d)\n",
 						dev_name(&input->dev),
@@ -119,6 +119,7 @@ void siw_touch_report_event(void *ts_data)
 	u16 release_mask = 0;
 	u16 change_mask = 0;
 	int i;
+	char touch_counter_log[200];
 
 //	t_dev_trcf(idev);
 
@@ -150,11 +151,11 @@ void siw_touch_report_event(void *ts_data)
 	for (i = 0; i < touch_max_finger(ts); i++, tdata++) {
 		if (new_mask & (1 << i)) {
 			input_mt_slot(input, i);
-		#if defined(__SIW_CONFIG_INPUT_ANDROID)
+		#if defined(SIW_CONFIG_INPUT_ANDROID)
 			input_mt_report_slot_state(input, MT_TOOL_FINGER, true);
 			siw_input_report_key(input, BTN_TOUCH, 1);
 			siw_input_report_key(input, BTN_TOOL_FINGER, 1);
-		#endif	/* __SIW_CONFIG_INPUT_ANDROID */
+		#endif	/* SIW_CONFIG_INPUT_ANDROID */
 			siw_input_report_abs(input, ABS_MT_TRACKING_ID, tdata->id);
 			siw_input_report_abs(input, ABS_MT_POSITION_X, tdata->x);
 			siw_input_report_abs(input, ABS_MT_POSITION_Y, tdata->y);
@@ -164,7 +165,19 @@ void siw_touch_report_event(void *ts_data)
 			siw_input_report_abs(input, ABS_MT_ORIENTATION, tdata->orientation);
 
 			if (press_mask & (1 << i)) {
+				if(!mobis_touch_counter_flag_check(i))
+				{
+					sprintf(touch_counter_log, "%s: %d finger press <%d> (%4d, %4d, %4d)",
+                                                dev_name(idev),
+                                                ts->tcount,
+                                                i,
+                                                tdata->x,
+                                                tdata->y,
+                                                tdata->pressure);
+					mobis_touch_counter_press(touch_counter_log, i);
+				}
 				if(siw_touch_cnt > 0)
+				{
 				t_dev_info(dev, "%s: %d finger press <%d> (%4d, %4d, %4d)\n",
                                                 dev_name(idev),
                                                 ts->tcount,
@@ -172,14 +185,17 @@ void siw_touch_report_event(void *ts_data)
                                                 tdata->x,
                                                 tdata->y,
                                                 tdata->pressure);
+				}
 				else
-				t_dev_dbg_button(dev, "%s: %d finger press <%d> (%4d, %4d, %4d)\n",
+				{
+					t_dev_dbg_button(dev, "%s: %d finger press <%d> (%4d, %4d, %4d)\n",
 						dev_name(idev),
 						ts->tcount,
 						i,
 						tdata->x,
 						tdata->y,
 						tdata->pressure);
+				}
 			}
 			else {
 				if(siw_touch_cnt > 0)
@@ -205,11 +221,18 @@ void siw_touch_report_event(void *ts_data)
 
 		if (release_mask & (1 << i)) {
 			input_mt_slot(input, i);
-		#if defined(__SIW_CONFIG_INPUT_ANDROID)
+		#if defined(SIW_CONFIG_INPUT_ANDROID)
 			input_mt_report_slot_state(input, MT_TOOL_FINGER, false);
-		#else	/* __SIW_CONFIG_INPUT_ANDROID */
+		#else	/* SIW_CONFIG_INPUT_ANDROID */
 			siw_input_report_abs(ts->input, ABS_MT_TRACKING_ID, -1);
-		#endif	/* __SIW_CONFIG_INPUT_ANDROID */
+		#endif	/* SIW_CONFIG_INPUT_ANDROID */
+			sprintf(touch_counter_log,"%s: finger release <%d> (%4d, %4d, %4d)",
+                                        dev_name(idev),
+                                        i,
+                                        tdata->x,
+                                        tdata->y,
+                                        tdata->pressure);
+			mobis_touch_counter_release(touch_counter_log, i);
 			if(siw_touch_cnt > 0)
 			{
 			t_dev_info(dev, "%s: finger release <%d> (%4d, %4d, %4d)\n",
@@ -231,10 +254,10 @@ void siw_touch_report_event(void *ts_data)
 	}
 
 	if (!ts->tcount) {
-	#if defined(__SIW_CONFIG_INPUT_ANDROID)
+	#if defined(SIW_CONFIG_INPUT_ANDROID)
 		siw_input_report_key(input, BTN_TOUCH, 0);
 		siw_input_report_key(input, BTN_TOOL_FINGER, 0);
-	#endif	/* __SIW_CONFIG_INPUT_ANDROID */
+	#endif	/* SIW_CONFIG_INPUT_ANDROID */
 	}
 
 	ts->old_mask = new_mask;
@@ -341,7 +364,7 @@ void siw_touch_send_uevent(void *ts_data, int type)
 	}
 
 	if (atomic_read(&ts->state.uevent) == UEVENT_IDLE) {
-	#if defined(__SIW_SUPPORT_WAKE_LOCK)
+	#if defined(SIW_SUPPORT_WAKE_LOCK)
 		wake_lock_timeout(&ts->lpwg_wake_lock,
 						msecs_to_jiffies(3000));
 	#endif
@@ -458,8 +481,8 @@ int siw_touch_init_input(void *ts_data)
 		return -EINVAL;
 	}
 
-#if defined(__SIW_CONFIG_INPUT_ANDROID)
-	t_dev_info(dev, "input cfg status : __SIW_CONFIG_INPUT_ANDROID\n");
+#if defined(SIW_CONFIG_INPUT_ANDROID)
+	t_dev_info(dev, "input cfg status : SIW_CONFIG_INPUT_ANDROID\n");
 #endif
 
 	phys_name = touch_kzalloc(dev, SIW_TOUCH_PHYS_NAME_SIZE, GFP_KERNEL);
@@ -502,11 +525,11 @@ int siw_touch_init_input(void *ts_data)
 
 	set_bit(EV_SYN, input->evbit);
 	set_bit(EV_ABS, input->evbit);
-#if defined(__SIW_CONFIG_INPUT_ANDROID)
+#if defined(SIW_CONFIG_INPUT_ANDROID)
 	set_bit(EV_KEY, input->evbit);
 	set_bit(BTN_TOUCH, input->keybit);
 	set_bit(BTN_TOOL_FINGER, input->keybit);
-#endif	/* __SIW_CONFIG_INPUT_ANDROID */
+#endif	/* SIW_CONFIG_INPUT_ANDROID */
 #if defined(INPUT_PROP_DIRECT)
 	set_bit(INPUT_PROP_DIRECT, input->propbit);
 #endif

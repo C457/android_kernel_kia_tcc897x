@@ -1247,6 +1247,7 @@ void hrtimer_interrupt(struct clock_event_device *dev)
 	struct hrtimer_cpu_base *cpu_base = this_cpu_ptr(&hrtimer_bases);
 	ktime_t expires_next, now, entry_time, delta;
 	int i, retries = 0;
+	struct hrtimer *g_timer = NULL;
 
 	BUG_ON(!cpu_base->hres_active);
 	cpu_base->nr_events++;
@@ -1280,6 +1281,7 @@ retry:
 			struct hrtimer *timer;
 
 			timer = container_of(node, struct hrtimer, node);
+			g_timer = timer;
 
 			/*
 			 * The immediate goal for using the softexpires is
@@ -1365,6 +1367,10 @@ retry:
 	tick_program_event(expires_next, 1);
 	printk_once(KERN_WARNING "hrtimer: interrupt took %llu ns\n",
 		    ktime_to_ns(delta));
+
+	if(g_timer != NULL && g_timer->function != NULL)
+		printk_once(KERN_WARNING "index=%d,  %pF at address : %p\n", i, g_timer->function, g_timer->function);
+	WARN_ONCE(1, "print hrtimer backtrace.");
 }
 
 /*

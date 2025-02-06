@@ -4,3 +4,8 @@ config MOBIS_NVDATA_HANDLER
 	help
 		"mobis nvdata handle driver"
 
+config MOBIS_SYSFS
+	bool "mobis sysfs driver"
+	default n
+	help
+		"mobis sysfs driver"

@@ -525,6 +525,12 @@ static struct tcc_suspend_ops suspend_ops = {
 #endif
 };
 
+#define 			LOW_BATTERY_IRQ_MAX 6
+static spinlock_t       low_battery_lock;
+static int 			low_battery_count = 0;
+struct work_struct low_battery_irq_work;
+static void low_battery_irq_wq(struct work_struct *work);
+
 static int __init tcc897x_suspend_init(void)
 {
 	suspend_board_config();
@@ -539,6 +545,7 @@ static int __init tcc897x_suspend_init(void)
 
 #if defined(CONFIG_DAUDIO_LOW_BATTERY)
 	/* register low battery irq */
+	INIT_WORK(&low_battery_irq_work, low_battery_irq_wq);
 	low_battery_irq_event_manager();	//140801, mobis, hklee, det_batt_low_4.5V
 #endif
 	return 0;
@@ -561,48 +568,47 @@ struct work_struct	ant_err_irq_work;
 
 static void ant_power_err_wq(struct work_struct *work)
 {
-       		mutex_lock(&ant_power_error);
-		numof_ant_power_err++;
-		if(numof_ant_power_err == MAX_NUM_OF_ANT_ERROR)
-		{
-			free_irq(INT_EINT8, &dummy_dev);
-			tcc_gpio_clear_ext_intr(INT_EINT8);
-			printk("ANT_POWER_ERR(GPIO_B01) - max value has been reached. interrupt is disabled.\n");
-			return;
-		}
-		if(numof_ant_power_err < MAX_NUM_OF_ANT_ERROR)
-		{
-			gpio_set_value(GPS_ANT_PWR_ON, 0);
-			mdelay(20);
-			gpio_set_value(GPS_ANT_PWR_ON, 1);
-			printk("GPS_ANT_PWR_ON(GPIO_B05) - LOW to HIGH!!, count=%d\n", numof_ant_power_err);
-			mdelay(4);
-		}
-
-       		mutex_unlock(&ant_power_error);
+	mutex_lock(&ant_power_error);
+	disable_irq(INT_EINT8);
+	numof_ant_power_err++;
+	gpio_set_value(GPS_ANT_PWR_ON, 0);
+	msleep(1000);
+	gpio_set_value(GPS_ANT_PWR_ON, 1);
+	printk("GPS_ANT_PWR_ON(GPIO_B05) - LOW to HIGH!!, count=%d\n", numof_ant_power_err);
+	msleep(200);
+	enable_irq(INT_EINT8);
+	mutex_unlock(&ant_power_error);
 }
 
 static irqreturn_t isr_ant_power_err(int irq, void* dev_id)
 {
-	unsigned long flags;
-        spin_lock_irqsave(&gps_pwr_lock, flags);
-
+//	unsigned long flags;
+//	spin_lock_irqsave(&gps_pwr_lock, flags);
         if(gpio_get_value(ANT_POWER_ERR))
                 printk("ANT_POWER_ERR(GPIO_B01) - HIGH!!\n");
         else
 		schedule_work(&ant_err_irq_work);
-
-        spin_unlock_irqrestore(&gps_pwr_lock, flags);
-
-        return IRQ_HANDLED;
+//	spin_unlock_irqrestore(&gps_pwr_lock, flags);
+	return IRQ_HANDLED;
 }
 
 /*===========================================================================
 IRQ	(140810, mobis, hklee, det_batt_low_4.5V)
 ===========================================================================*/
+
+static void low_battery_irq_wq(struct work_struct *work)
+{
+	disable_irq(INT_EINT5);
+	printk("kernel low_battery_count max count reached(%d).\n", low_battery_count);
+}
+
 static irqreturn_t isr_low_battery_management_routine(int irq, void* dev_id)
 {
-#if defined(CONFIG_XM)
+	unsigned long flags;
+
+	spin_lock_irqsave(&low_battery_lock, flags);
+	low_battery_count++;
+#if defined(INCLUDE_XM)
 	//sxm shutdown
 	gpio_set_value(SIRIUS_GPIO_RESET, 1);
 	mdelay(6);
@@ -610,6 +616,11 @@ static irqreturn_t isr_low_battery_management_routine(int irq, void* dev_id)
 	tcc_gpio_config(TCC_GPF(14), GPIO_FN(0)|GPIO_OUTPUT|GPIO_LOW|GPIO_PULL_DISABLE);
 	gpio_set_value(SIRIUS_GPIO_SHDN, 0);
 #endif
+	spin_unlock_irqrestore(&low_battery_lock, flags);
+	if (low_battery_count >= LOW_BATTERY_IRQ_MAX)
+	{
+		schedule_work(&low_battery_irq_work);
+	}
 	return IRQ_HANDLED;
 }
 
@@ -644,7 +655,7 @@ void low_battery_irq_event_manager(void)
 	int ret;
 	volatile PGPION pgpio = (PGPION)tcc_p2v(HwGPIOB_BASE);
 
-#if defined(CONFIG_XM)
+#if defined(INCLUDE_XM)
 	ret = gpio_request(SIRIUS_GPIO_SHDN, "sirius_shutdown");
 	if(ret)
 		printk("%s, there is some trouble on xm shdn\n", __func__);

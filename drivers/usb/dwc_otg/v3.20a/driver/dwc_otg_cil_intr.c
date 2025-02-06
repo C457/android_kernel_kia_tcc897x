@@ -1849,9 +1849,10 @@ int32_t dwc_otg_handle_common_intr(void *dev)
 				if(hprt0.b.prtconndet == 1)
 				{
 					DWC_DEBUGPL(DBG_ANY, "HPRT0=0x%08x Port Connection is detected.\n",hprt0.d32);
+#ifdef CONFIG_PM_RUNTIME
 					/* Inform the HUB driver to resume. */
 					usb_hcd_resume_root_hub(otg_dev->hcd->priv);
-				    
+#endif
 					gintsts.d32 = 0;
 					gintsts.b.portintr = 1;
 					DWC_WRITE_REG32(&core_if->core_global_regs->gintsts,gintsts.d32);

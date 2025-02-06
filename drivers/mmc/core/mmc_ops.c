@@ -252,6 +252,68 @@ mmc_send_cxd_native(struct mmc_host *host, u32 arg, u32 *cxd, int opcode)
 	return 0;
 }
 
+#ifdef CONFIG_DAUDIO_KK
+static int
+mmc_send_cxd_data_ex(struct mmc_card *card, struct mmc_host *host,
+		u32 opcode, void *buf, unsigned len, u32 argument)
+{
+	struct mmc_request mrq = {NULL};
+	struct mmc_command cmd = {0};
+	struct mmc_data data = {0};
+	struct scatterlist sg;
+	void *data_buf;
+	int is_on_stack;
+
+	is_on_stack = object_is_on_stack(buf);
+	if (is_on_stack) {
+		/*
+		 * dma onto stack is unsafe/nonportable, but callers to this
+		 * routine normally provide temporary on-stack buffers ...
+		 */
+		data_buf = kmalloc(len, GFP_KERNEL);
+		if (!data_buf)
+			return -ENOMEM;
+	} else
+		data_buf = buf;
+
+	mrq.cmd = &cmd;
+	mrq.data = &data;
+
+	cmd.opcode = opcode;
+	cmd.arg = argument;
+
+	/* NOTE HACK:  the MMC_RSP_SPI_R1 is always correct here, but we
+	 * rely on callers to never use this with "native" calls for reading
+	 * CSD or CID.  Native versions of those commands use the R2 type,
+	 * not R1 plus a data block.
+	 */
+	cmd.flags = MMC_RSP_SPI_R1 | MMC_RSP_R1 | MMC_CMD_ADTC;
+
+	data.blksz = len;
+	data.blocks = 1;
+	data.flags = MMC_DATA_READ;
+	data.sg = &sg;
+	data.sg_len = 1;
+
+	sg_init_one(&sg, data_buf, len);
+
+	mmc_set_data_timeout(&data, card);
+	mmc_wait_for_req(host, &mrq);
+
+	if (is_on_stack) {
+		memcpy(buf, data_buf, len);
+		kfree(data_buf);
+	}
+
+	if (cmd.error)
+		return cmd.error;
+	if (data.error)
+		return data.error;
+
+	return 0;
+}
+#endif
+
 /*
  * NOTE: void *buf, caller for the buf is required to use DMA-capable
  * buffer or on-stack buffer (with some overhead in callee).
@@ -384,6 +446,15 @@ int mmc_send_ext_csd(struct mmc_card *card, u8 *ext_csd)
 			ext_csd, 512);
 }
 EXPORT_SYMBOL_GPL(mmc_send_ext_csd);
+
+#ifdef CONFIG_DAUDIO_KK
+int mmc_send_gen56_data(struct mmc_card *card, u8 *gen_buffer)
+{
+	return mmc_send_cxd_data_ex(card, card->host, MMC_GEN_CMD, gen_buffer, 512, 0x00000039);
+}
+EXPORT_SYMBOL_GPL(mmc_send_gen56_data);
+#endif
+
 
 int mmc_spi_read_ocr(struct mmc_host *host, int highcap, u32 *ocrp)
 {

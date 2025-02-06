@@ -9,14 +9,14 @@
  * version 2 as published by the Free Software Foundation.
  */
 
-#ifndef __SIW_TOUCH_DBG_H
-#define __SIW_TOUCH_DBG_H
+#ifndef SIW_TOUCH_DBG_H
+#define SIW_TOUCH_DBG_H
 
 #include <linux/errno.h>
 
-#define __SIZE_POW(x)			(1<<(x))
+#define SIZE_POW(x)			(1<<(x))
 
-enum _SIW_TOUCH_DBG_FLAG {
+enum SIW_TOUCH_DBG_FLAG {
 	DBG_NONE				= 0,
 	DBG_BASE				= (1U << 0),
 	DBG_TRACE				= (1U << 1),
@@ -218,5 +218,5 @@ enum {
 #define ETDSENTESD			((ENOMEDIUM<<3) + 0x01)
 #define ETDSENTESDIRQ		((ENOMEDIUM<<3) + 0x0F)
 
-#endif	/* __SIW_TOUCH_DBG_H */
+#endif	/* SIW_TOUCH_DBG_H */
 

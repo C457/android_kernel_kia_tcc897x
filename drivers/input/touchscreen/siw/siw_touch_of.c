@@ -37,89 +37,89 @@
 #endif
 
 
-#if defined(__SIW_CONFIG_OF)	//See siw_touch_cfg.h
+#if defined(SIW_CONFIG_OF)	//See siw_touch_cfg.h
 static int siw_touch_of_gpio(struct device *dev, void *np,
-					void *string, enum of_gpio_flags *flags)
+					void *siw_string, enum of_gpio_flags *flags)
 {
 	int gpio = 0;
 
-	gpio = of_get_named_gpio_flags(np, string, 0, flags);
+	gpio = of_get_named_gpio_flags(np, siw_string, 0, flags);
 	if (gpio_is_valid(gpio)) {
 		if (flags)
 			t_dev_info(dev, "of gpio  : %s(0x%X), %d\n",
-					(char *)string, (*flags), gpio);
+					(char *)siw_string, (*flags), gpio);
 		else
 			t_dev_info(dev, "of gpio  : %s, %d\n",
-					(char *)string, gpio);
+					(char *)siw_string, gpio);
 	}
 
 	return gpio;
 }
 
 static bool siw_touch_of_bool(struct device *dev, void *np,
-					void *string)
+					void *siw_string)
 {
 	u32 val = 0;
 	int ret = 0;
 
-	ret = of_property_read_u32(np, string, &val);
+	ret = of_property_read_u32(np, siw_string, &val);
 	if (ret < 0) {
 		return 0;
 	}
 
-	t_dev_dbg_of(dev, "of bool  : %s, %d\n", (char *)string, val);
+	t_dev_dbg_of(dev, "of bool  : %s, %d\n", (char *)siw_string, val);
 	return (bool)val;
 }
 
 static u32 siw_touch_of_u32(struct device *dev, void *np,
-					void *string)
+					void *siw_string)
 {
 	u32 val = 0;
 	int ret = 0;
 
-	ret = of_property_read_u32(np, string, &val);
+	ret = of_property_read_u32(np, siw_string, &val);
 	if (ret < 0) {
 		return 0;
 	}
 
-	t_dev_dbg_of(dev, "of u32   : %s, %d\n", (char *)string, val);
+	t_dev_dbg_of(dev, "of u32   : %s, %d\n", (char *)siw_string, val);
 	return val;
 }
 
 /* Caution : MSB(bit31) unavailable */
 static int siw_touch_of_int(struct device *dev, void *np,
-					void *string)
+					void *siw_string)
 {
 	u32 val = 0;
 	int ret = 0;
 
-	ret = of_property_read_u32(np, string, &val);
+	ret = of_property_read_u32(np, siw_string, &val);
 	if (ret < 0) {
 		return -ENXIO;
 	}
 
-	t_dev_dbg_of(dev, "of int   : %s, %d\n", (char *)string, val);
+	t_dev_dbg_of(dev, "of int   : %s, %d\n", (char *)siw_string, val);
 	return val;
 }
 
 static void siw_touch_of_array(struct device *dev, void *np,
-					void *string, const char **name, int *cnt)
+					void *siw_string, const char **name, int *cnt)
 {
 	int i;
 	int ret = 0;
 
 	(*cnt) = 0;
 
-	ret = of_property_count_strings(np, string);
+	ret = of_property_count_strings(np, siw_string);
 	if (ret < 0) {
-		t_dev_warn(dev, "of count : %s not found\n", (char *)string);
+		t_dev_warn(dev, "of count : %s not found\n", (char *)siw_string);
 		return;
 	}
 
 	(*cnt) = ret;
-	t_dev_dbg_of(dev, "of count : %s, %d\n", (char *)string, (*cnt));
+	t_dev_dbg_of(dev, "of count : %s, %d\n", (char *)siw_string, (*cnt));
 	for (i = 0; i < (*cnt); i++) {
-		ret = of_property_read_string_index(np, string, i, (const char **)&name[i]);
+		ret = of_property_read_string_index(np, siw_string, i, (const char **)&name[i]);
 		if (!ret) {
 			t_dev_info(dev, "of string[%d/%d] : %s\n", i+1, (*cnt), name[i]);
 		}
@@ -127,15 +127,15 @@ static void siw_touch_of_array(struct device *dev, void *np,
 }
 
 static int siw_touch_of_string(struct device *dev, void *np,
-					void *string, const char **name)
+					void *siw_string, const char **name)
 {
 	int ret;
 
-	ret = of_property_read_string(np, string, name);
+	ret = of_property_read_string(np, siw_string, name);
 	if (!ret) {
-		t_dev_info(dev, "of_string : %s, %s\n", (char *)string, *name);
+		t_dev_info(dev, "of_string : %s, %s\n", (char *)siw_string, *name);
 	} else {
-		t_dev_warn(dev, "of_string : %s not found\n", (char *)string);
+		t_dev_warn(dev, "of_string : %s not found\n", (char *)siw_string);
 	}
 
 	return ret;
@@ -161,10 +161,10 @@ out:
 #define siw_touch_parse_dts_watch(_ts)	({	int _r = 0;	_r; })
 #endif	/* __SIW_SUPPORT_WATCH */
 
-#if defined(__SIW_SUPPORT_PRD)
+#if defined(SIW_SUPPORT_PRD)
 /*
  * weak(dummy) function for PRD control
- * These are deactivated by enabling __SIW_SUPPORT_PRD
+ * These are deactivated by enabling SIW_SUPPORT_PRD
  * and the actual functions can be found in siw_touch_hal_prd.c
  */
 int __weak siw_hal_set_prd_file(struct device *dev, const char *path, int idx)
@@ -210,9 +210,9 @@ static int siw_touch_parse_dts_prd(struct siw_ts *ts)
 
 	return 0;
 }
-#else	/* __SIW_SUPPORT_PRD */
+#else	/* SIW_SUPPORT_PRD */
 #define siw_touch_parse_dts_prd(_ts)	({	int _r = 0;	_r; })
-#endif	/* __SIW_SUPPORT_PRD */
+#endif	/* SIW_SUPPORT_PRD */
 
 static int siw_touch_do_parse_dts(struct siw_ts *ts)
 {
@@ -380,14 +380,14 @@ out:
 }
 
 
-#else	/* __SIW_CONFIG_OF */
+#else	/* SIW_CONFIG_OF */
 
 static int siw_touch_parse_dts(struct siw_ts *ts)
 {
 	struct device *dev = ts->dev;
 	struct touch_pins *pins = &ts->pins;
 
-	t_dev_info(dev, "__SIW_CONFIG_OF disabled\n");
+	t_dev_info(dev, "SIW_CONFIG_OF disabled\n");
 
 	ts->irqflags = pdata_irqflags(ts->pdata);
 
@@ -439,7 +439,7 @@ static int siw_touch_parse_dts(struct siw_ts *ts)
 
 	return 0;
 }
-#endif	/* __SIW_CONFIG_OF */
+#endif	/* SIW_CONFIG_OF */
 
 int siw_touch_parse_data(struct siw_ts *ts)
 {

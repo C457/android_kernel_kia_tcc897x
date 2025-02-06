@@ -73,7 +73,6 @@
 #include <asm/mach-types.h>
 #ifdef CONFIG_PM
 #include <linux/pm.h>
-#include <linux/pm_runtime.h>
 #endif
 #ifdef CONFIG_PM_RUNTIME
 #include <linux/pm_runtime.h>
@@ -290,8 +289,9 @@ static void tcc_fd_fence_wait(struct sync_fence *fence)
 static void tcc_fb_update_regs(struct tccfb_info *tccfb, struct tcc_fenc_reg_data *regs)
 {
 	unsigned int BaseAddr;
+#ifdef CONFIG_PM_RUNTIME
 	pm_runtime_get_sync(tccfb->fb->dev);
-
+#endif
 	if ((regs->fence_fd > 0) && (regs->fence))	{
 		tcc_fd_fence_wait(regs->fence);
 		sync_fence_put(regs->fence);
@@ -316,9 +316,9 @@ static void tcc_fb_update_regs(struct tccfb_info *tccfb, struct tcc_fenc_reg_dat
 
 	tca_fb_vsync_activate(&tccfb->pdata.Mdp_data);
 //	tccfb->fb->fbops->fb_pan_display(&regs->var, tccfb->fb);
-
+#ifdef CONFIG_PM_RUNTIME
 	pm_runtime_put_sync(tccfb->fb->dev);
-
+#endif
 	sw_sync_timeline_inc(tccfb->fb_timeline, 1);
 }
 
@@ -1563,6 +1563,13 @@ static int tccfb_ioctl(struct fb_info *info, unsigned int cmd,unsigned long arg)
 			{
 				unsigned int type;
 				struct tcc_dp_device *pdp_data = NULL;
+
+				if(fb_lock)
+				{
+					printk("FBDIO_DISABLE is skipped: fb_lock - [%d]\n", fb_lock);
+					return -EFAULT;
+				}
+
 				if (copy_from_user((void *)&type, (const void *)arg, sizeof(unsigned int ))) {
 					return -EFAULT;
 				}
@@ -1581,11 +1588,7 @@ static int tccfb_ioctl(struct fb_info *info, unsigned int cmd,unsigned long arg)
 			#if 1
 						VIOC_RDMA_SetImageAlphaEnable(pdp_data->rdma_info[RDMA_FB].virt_addr, 1);
 						VIOC_RDMA_SetImageAlphaSelect(pdp_data->rdma_info[RDMA_FB].virt_addr, 0);
-				#if defined(CONFIG_ARCH_TCC897X) || defined(CONFIG_ARCH_TCC803X)
-						VIOC_RDMA_SetImageAlpha(pdp_data->rdma_info[RDMA_FB].virt_addr, 0xFFF, 0xFFF);
-				#else
 						VIOC_RDMA_SetImageAlpha(pdp_data->rdma_info[RDMA_FB].virt_addr, 0x0, 0x0);
-				#endif//
 			#else //
 						{
 							int sc_num = 0;
@@ -1765,7 +1768,7 @@ static int tccfb_setcolreg(unsigned regno,
  *	Returns negative errno on error, or zero on success.
  *
  */
-#ifdef CONFIG_PM_RUNTIME
+#ifdef CONFIG_PM
 static void touchscreen_enable(void)
 {
 		extern int tcc_ts_enabled;
@@ -1851,7 +1854,9 @@ static void touchscreen_disable(void)
     }
 #endif
 }
+#endif
 
+#ifdef CONFIG_PM_RUNTIME
 static int tcc_fb_enable(struct fb_info *info)
 {		
 	int ret = 0;
@@ -1907,6 +1912,9 @@ static int tccfb_blank(int blank_mode, struct fb_info *info)
 	return 0; // For mali400 X display drivers
 	#endif
 
+	// not used
+	return 0;
+
 	pm_runtime_get_sync(fbi->dev);
 
 	switch(blank_mode)
@@ -1928,6 +1936,7 @@ static int tccfb_blank(int blank_mode, struct fb_info *info)
 	pm_runtime_put_sync(fbi->dev);
 
 #endif
+	printk(KERN_INFO "%s\n", __func__);
 
 	return 0;
 }
@@ -2003,7 +2012,7 @@ struct dma_buf* tccfb_dmabuf_export(struct fb_info *info)
 
 
 
-#ifdef CONFIG_PM_RUNTIME
+#ifdef CONFIG_PM
 /* suspend and resume support for the lcd controller */
 static int tccfb_suspend(struct device *dev)
 {
@@ -2513,17 +2522,17 @@ int tcc_fb_runtime_resume(struct device *dev)
 
 #endif
 
-#ifdef CONFIG_PM_RUNTIME
 static const struct dev_pm_ops tccfb_pm_ops = {
+#ifdef CONFIG_PM_RUNTIME
 	.runtime_suspend      = tcc_fb_runtime_suspend,
 	.runtime_resume       = tcc_fb_runtime_resume,
+#endif
 	.suspend	= tccfb_suspend,
 	.resume = tccfb_resume,
 	.freeze = tccfb_freeze,
 	.thaw = tccfb_thaw,
 	.restore = tccfb_restore,
 };
-#endif
 
 
 static struct platform_driver tccfb_driver = {
@@ -2533,9 +2542,7 @@ static struct platform_driver tccfb_driver = {
 	.driver		= {
 		.name	= "tccfb",
 		.owner	= THIS_MODULE,
-#ifdef CONFIG_PM_RUNTIME
 		.pm		= &tccfb_pm_ops,
-#endif
 		.of_match_table = of_match_ptr(tccfb_of_match),
 	},
 };

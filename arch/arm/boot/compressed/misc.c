@@ -23,7 +23,7 @@ unsigned int __machine_arch_type;
 #include <linux/linkage.h>
 
 
-#ifdef CONFIG_SNAPSHOT_BOOT
+#ifdef CONFIG_DAUDIO_KK
 #include <asm/io.h>
 #endif
 
@@ -91,7 +91,7 @@ static void icedcc_putc(int ch)
 static void putstr(const char *ptr)
 {
 	char c;
-#ifdef CONFIG_SNAPSHOT_BOOT
+#ifdef CONFIG_DAUDIO_KK
 	u32 nReg = 0x00;
 
 	nReg = (readl(0x74200080) & 0x400000) ? 1 : 0;

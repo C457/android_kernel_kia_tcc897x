@@ -91,7 +91,7 @@ Suite 330, Boston, MA 02111-1307 USA
 //#define FEATURE_USE_DEINTLS_REAR_CAMERA
 //#define PREVIEW_RATIO_KEEP
 
-static int debug	= 0;
+static int debug	= 1;
 #define log(msg...)	if(debug) { printk("%s - ", __func__); printk(msg); }
 #define FUNCTION_IN	log("START\n");
 #define FUNCTION_OUT	log("FINISH\n");
@@ -156,11 +156,16 @@ void test_registers(struct tcc_camera_device * vdev) {
 				printk("%08x ", *(addr + idxReg));
 			}
 		}
-		printk("\n[TW9990 Register Check]\n");
-		printk("reg : 0x01, val : 0x%x\n", sensor_if_read_i2c(0x01,vdev));
+
+		if(vdev->data.cam_info == DAUDIO_CAMERA_REAR) {
+			printk("\n[TW9990 Register Check]\n");
+			printk("reg : 0x01, val : 0x%x\n", sensor_if_read_i2c(0x01,vdev));
+		}
 	}
-	printk("reg : 0x02, val : 0x%x\n", sensor_if_read_i2c(0x02,vdev));
-	printk("reg : 0x03, val : 0x%x\n", sensor_if_read_i2c(0x03,vdev));
+	if(vdev->data.cam_info == DAUDIO_CAMERA_REAR) {
+		printk("reg : 0x02, val : 0x%x\n", sensor_if_read_i2c(0x02,vdev));
+		printk("reg : 0x03, val : 0x%x\n", sensor_if_read_i2c(0x03,vdev));
+	}
 }
 
 int direct_display_parse_device_tree(struct tcc_camera_device * vdev) {
@@ -473,8 +478,8 @@ int direct_display_set_vin(struct tcc_camera_device * vdev) {
 		VIOC_VIN_SetLUT(pVIN, vdev->vioc.lut.address);
 		VIOC_VIN_SetLUTEnable(pVIN, ON, ON, ON);
 //		VIOC_VIN_SetLUT_by_table(pVIN, rgb);
-        tccxxx_cif_vin_lut_update(vdev);
-        vioc_intr_enable(vdev->data.vioc_vin_intr.id, vdev->data.vioc_vin_intr.bits);
+		tccxxx_cif_vin_lut_update(vdev);
+		vioc_intr_enable(vdev->data.vioc_vin_intr.id, vdev->data.vioc_vin_intr.bits);
 	}
 	else {
 		VIOC_VIN_SetLUTEnable(pVIN, OFF, OFF, OFF);
@@ -874,9 +879,9 @@ int direct_display_stop(struct tcc_camera_device * vdev) {
 	}
 	
 	// disable VIN
-    vioc_intr_disable(vdev->data.vioc_vin_intr.id, vdev->data.vioc_vin_intr.bits);
+	vioc_intr_disable(vdev->data.vioc_vin_intr.id, vdev->data.vioc_vin_intr.bits);
 	VIOC_VIN_SetEnable(pVIN, OFF);
-    
+
 #if defined(CONFIG_TCC_REAR_CAMERA_DRV)
 	// disable PGL
 	VIOC_RDMA_SetImageDisable(pPGL);
@@ -892,42 +897,53 @@ int direct_display_stop(struct tcc_camera_device * vdev) {
 	return 0;
 }
 
-int direct_display_check_wdma_counter(struct tcc_camera_device * vdev) {
-	VIOC_WDMA * pWDMA = (VIOC_WDMA *)vdev->vioc.wdma.address;
-	
-	volatile unsigned int prev_addr, curr_addr;
-	volatile int nCheck, idxCheck, delay = 100;
-	
-	curr_addr = pWDMA->uCBASE;
-	msleep(delay);
-	
-	nCheck = 5;
-	for(idxCheck=0; idxCheck<nCheck; idxCheck++) {
-		prev_addr = curr_addr;
-		msleep(delay);
-		curr_addr = pWDMA->uCBASE;
-		
-		if(prev_addr != curr_addr)
-			return 0;
-		else
-			;//log("[%d] prev_addr: 0x%08x, curr_addr: 0x%08x\n", idxCheck, prev_addr, curr_addr);
-	}
-	return -1;
-}
-
 int direct_display_monitor_thread(void * data) {
 	struct tcc_camera_device * vdev = (struct tcc_camera_device *)data;
+	VIOC_WDMA *pWDMA = (VIOC_WDMA *)vdev->vioc.wdma.address;
 	VIOC_RDMA * pRDMA = (VIOC_RDMA *)vdev->vioc.rdma.address;
 	
-	printk("%s\n",__func__);
+	volatile unsigned int prev_addr, curr_addr;
+	volatile unsigned int nCheck, idxCheck, delay = 30U;
+
+	bool bRecover;
+	unsigned int nRdmaEnable = 0;
+
 	FUNCTION_IN
 	
 	while(1) {
-		if(kthread_should_stop())
-			break;
-		
-		if(direct_display_check_wdma_counter(vdev) == -1) {
-			printk("%s::Recovery mode will be entered\n", __func__);
+		nCheck = 17;
+
+		bRecover = true;
+		curr_addr = pWDMA->uCBASE;
+		for(idxCheck=0; idxCheck<nCheck; idxCheck++) {
+			if(kthread_should_stop())
+				return 0;
+
+			prev_addr = curr_addr;
+
+			// Force RDMA 1 to be enabled if RDMA 1 is not set
+			VIOC_RDMA_GetImageEnable(pRDMA, &nRdmaEnable);
+			if(!nRdmaEnable)
+			{
+				VIOC_RDMA_SetImageEnable(pRDMA);
+				printk("RDMA1 was recovered\n");
+			}
+
+			msleep(delay);
+
+			curr_addr = pWDMA->uCBASE;
+
+			if(prev_addr != curr_addr){
+				bRecover = false;
+				break;
+			}
+			else
+				;//LOG("[%d] prev_addr: 0x%08x, curr_addr: 0x%08x\n", idxCheck, prev_addr, curr_addr);
+		}
+		if(bRecover) {
+			printk("%s::Recovery mode will be entered.\n", __func__);
+			vdev->cam_err.soc_dma_err = 1;
+			//printk("cam_info: SoC DMA error\n");
 			
 			test_registers(vdev);
 
@@ -939,11 +955,22 @@ int direct_display_monitor_thread(void * data) {
 			sensor_if_open(vdev);
 			//sensor_if_change_mode_ex(vdev->gParams.camera_type, vdev->gParams.camera_encode, vdev);
 
+			// Reduce thread termination delay (max: 100ms)
+			if(kthread_should_stop()) {
+				mutex_unlock(&vdev->dd_lock);
+				break;
+			}
+
 			direct_display_start(vdev);
 			
 			mutex_unlock(&vdev->dd_lock);
 		}
+		else if(vdev->cam_err.soc_dma_err) {
+			//printk("cam_info: SoC DMA normal\n");
+			vdev->cam_err.soc_dma_err = 0;
+		}
 	}
+	
 	FUNCTION_OUT
 	return 0;
 }

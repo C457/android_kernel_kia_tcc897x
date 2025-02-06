@@ -88,8 +88,10 @@ _mali_osk_errcode_t mali_mem_prepare_mem_for_job(struct mali_gp_job *next_gp_job
 {
 	u32 require_page;
 
-	if (!next_gp_job)
+	if (!next_gp_job) {
+		printk("[MALI] %s:%d next_gp_job is null\n", __func__, __LINE__);
 		return _MALI_OSK_ERR_FAULT;
+	}
 
 	require_page = mali_dmem_get_gp_varying_size(next_gp_job);
 
@@ -97,6 +99,7 @@ _mali_osk_errcode_t mali_mem_prepare_mem_for_job(struct mali_gp_job *next_gp_job
 			     require_page));
 	/* allocate more pages from OS */
 	if (_MALI_OSK_ERR_OK != mali_mem_defer_alloc_mem(require_page, next_gp_job->session, dblock)) {
+		printk("[MALI] %s:%d 0x%x allocate page failed!!\n", __func__, __LINE__, require_page);
 		MALI_DEBUG_PRINT(1, ("ERROR##mali_mem_defer_prepare_mem_work, allocate page failed!!"));
 		return _MALI_OSK_ERR_NOMEM;
 	}

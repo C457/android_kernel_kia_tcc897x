@@ -308,6 +308,8 @@
 		/*cap-power-off-card;*/
 
 		/* tcc-clock-control; */
+
+		no-mmc;
 	};
 
 	//eMMC Boot
@@ -363,6 +365,10 @@
 
 		tcc-kpanic;
 		tcc-clock-control;
+
+		no-sdio;
+		no-sd;
+		cap-erase;
 	};
 
 	//SD Card (map/booting)
@@ -410,6 +416,9 @@
 		//tcc-kpanic;
 
 		/* tcc-clock-control; */
+		no-sdio;
+		no-mmc;
+
 	};
 
 	tcm3800 {

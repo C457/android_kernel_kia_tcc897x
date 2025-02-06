@@ -81,7 +81,7 @@ int mip4_ts_control_regulator(struct mip4_ts_info *info, int enable)
 
 	if (info->power == enable) {
 		dev_dbg(&info->client->dev, "%s - skip\n", __func__);
-		goto exit;
+		goto mip4_exit;
 	}
 
 	//////////////////////////
@@ -90,7 +90,7 @@ int mip4_ts_control_regulator(struct mip4_ts_info *info, int enable)
 
 	if (IS_ERR_OR_NULL(info->regulator_vd33)) {
 		dev_err(&info->client->dev, "%s [ERROR] regulator_vd33 not found\n", __func__);
-		goto exit;
+		goto mip4_exit;
 	}
 
 	if (enable) {
@@ -135,7 +135,7 @@ int mip4_ts_control_regulator(struct mip4_ts_info *info, int enable)
 
 	info->power = enable;
 
-exit:
+mip4_exit:
 	dev_dbg(&info->client->dev, "%s [DONE]\n", __func__);
 	return 0;
 
@@ -361,6 +361,8 @@ void mip4_ts_input_event_handler(struct mip4_ts_info *info, u8 sz, u8 *buf)
 	int finger_cnt = 0;
 	static int debug_cnt = 0;
 
+	char *touch_counter_log[200];
+
 #if USE_INT_DBG
 	dev_dbg(&info->client->dev, "%s [START]\n", __func__);
 #endif
@@ -379,7 +381,7 @@ void mip4_ts_input_event_handler(struct mip4_ts_info *info, u8 sz, u8 *buf)
 			type = (packet[0] & 0xF0) >> 4;
 		} else {
 			dev_err(&info->client->dev, "%s [ERROR] Unknown event format [%d]\n", __func__, info->event_format);
-			goto exit;
+			goto mip4_exit;
 		}
 #if USE_INT_DBG
 		dev_dbg(&info->client->dev, "%s - Type[%d]\n", __func__, type);
@@ -425,7 +427,7 @@ void mip4_ts_input_event_handler(struct mip4_ts_info *info, u8 sz, u8 *buf)
 				touch_minor = packet[10];
 			} else {
 				dev_err(&info->client->dev, "%s [ERROR] Unknown event format [%d]\n", __func__, info->event_format);
-				goto exit;
+				goto mip4_exit;
 			}
 
 			if (!((id >= 0) && (id < MAX_FINGER_NUM))) {
@@ -456,13 +458,19 @@ void mip4_ts_input_event_handler(struct mip4_ts_info *info, u8 sz, u8 *buf)
 
 				info->touch_state[id] = 1;
 
-				if(id == 3)
+				if((id == 3) && (debug_cnt < INT_MAX))
                                 	debug_cnt++;
 
 #ifdef CONFIG_KERNEL_DEBUG_SEC
-				if((melfas_debug >= DEBUG_MESSAGE&&melfas_debug <= DEBUG_TRACE)||(id==3&&debug_cnt%100 == 0)||(melfas_touch_cnt > 0))
+				if(((melfas_debug >= DEBUG_MESSAGE) && (melfas_debug <= DEBUG_TRACE)) ||
+				  ((id == 3) && ((debug_cnt % 100) == 0)) || (melfas_touch_cnt > 0))
 				{
 					dev_info(&info->client->dev, "%s - Screen : ID[%d] X[%d] Y[%d] Z[%d] Major[%d] Minor[%d] Size[%d] Pressure[%d] Palm[%d] Hover[%d]\n", __func__, id, x, y, pressure, touch_major, touch_minor, size, pressure, palm, hover);
+				}
+				if(!mobis_touch_counter_flag_check(id))
+				{
+					sprintf(touch_counter_log, "ID[%d] X[%d] Y[%d] Z[%d] Major[%d] Minor[%d] Size[%d] Pressure[%d] Palm[%d] Hover[%d]", id, x, y, pressure, touch_major, touch_minor, size, pressure, palm, hover);
+					mobis_touch_counter_press(touch_counter_log, id);
 				}
 #endif
 			} else if (state == 0) {
@@ -478,12 +486,14 @@ void mip4_ts_input_event_handler(struct mip4_ts_info *info, u8 sz, u8 *buf)
 				info->touch_state[id] = 0;
 
 #ifdef CONFIG_KERNEL_DEBUG_SEC
-				if((melfas_debug >= DEBUG_MESSAGE&&melfas_debug <= DEBUG_TRACE)||(debug_cnt > 100)||(melfas_touch_cnt > 0))
+				if(((melfas_debug >= DEBUG_MESSAGE) && (melfas_debug <= DEBUG_TRACE))||(debug_cnt > 100)||(melfas_touch_cnt > 0))
 				{
 					dev_info(&info->client->dev, "%s - Screen : ID[%d] Count[%d] Release\n", __func__, id, debug_cnt);
 					if(melfas_touch_cnt > 0)
 						melfas_touch_cnt--;
 				}
+				sprintf(touch_counter_log, "ID[%d] X[%d] Y[%d] Count[%d] Release", id, x, y, debug_cnt);
+				mobis_touch_counter_release(touch_counter_log, id);
 #endif
 				debug_cnt = 0;
 				/* Final release event */
@@ -502,7 +512,7 @@ void mip4_ts_input_event_handler(struct mip4_ts_info *info, u8 sz, u8 *buf)
 				}
 			} else {
 				dev_err(&info->client->dev, "%s [ERROR] Unknown event state [%d]\n", __func__, state);
-				goto exit;
+				goto mip4_exit;
 			}
 
 			//
@@ -517,7 +527,7 @@ void mip4_ts_input_event_handler(struct mip4_ts_info *info, u8 sz, u8 *buf)
 				state = (packet[1] & 0x01);
 			} else {
 				dev_err(&info->client->dev, "%s [ERROR] Unknown event format [%d]\n", __func__, info->event_format);
-				goto exit;
+				goto mip4_exit;
 			}
 
 			/* Report key event */
@@ -559,13 +569,13 @@ void mip4_ts_input_event_handler(struct mip4_ts_info *info, u8 sz, u8 *buf)
 			/////////////////////////////////
 		} else {
 			dev_err(&info->client->dev, "%s [ERROR] Unknown event type [%d]\n", __func__, type);
-			goto exit;
+			goto mip4_exit;
 		}
 	}
 
 	input_sync(info->input_dev);
 
-exit:
+mip4_exit:
 #if USE_INT_DBG
 	dev_dbg(&info->client->dev, "%s [DONE]\n", __func__);
 #endif
@@ -811,13 +821,12 @@ void mip4_ts_config_input(struct mip4_ts_info *info)
 	input_mt_init_slots(input_dev, MAX_FINGER_NUM, INPUT_MT_DIRECT);
 
 	//input_set_abs_params(input_dev, ABS_MT_TRACKING_ID, 0, MAX_FINGER_NUM, 0, 0);
+#if defined(CONFIG_WIDE_PE_COMMON) || defined(CONFIG_DAUDIO_KK)
+	dev_info(&info->client->dev, "force set max_x : %d -> 1920 max_y : %d -> 720",info->max_x, info->max_y);
+	info->max_x = 1920;
+	info->max_y = 720;
+#endif
 
-	if(!get_montype())
-	{
-		dev_info(&info->client->dev, "max_x : %d max_y : %d",info->max_x, info->max_y);
-		info->max_x = 1920;
-		info->max_y = 720;
-	}
 	input_set_abs_params(input_dev, ABS_MT_POSITION_X, 0, info->max_x, 0, 0);
 	input_set_abs_params(input_dev, ABS_MT_POSITION_Y, 0, info->max_y, 0, 0);
 	input_set_abs_params(input_dev, ABS_MT_PRESSURE, 0, INPUT_PRESSURE_MAX, 0, 0);

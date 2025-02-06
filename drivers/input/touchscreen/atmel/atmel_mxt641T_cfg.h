@@ -1,5 +1,5 @@
-#ifndef __ATMEL_MXT641T_CFG_H
-#define __ATMEL_MXT641T_CFG_H
+#ifndef ATMEL_MXT641T_CFG_H
+#define ATMEL_MXT641T_CFG_H
 
 //[SPT_USERDATA_T38 INSTANCE 0]
 unsigned char cfg_641T_T38[64] = {'1', '8', '1', '1', '1', '4', '0', '4', 0, 0, };
@@ -143,4 +143,4 @@ unsigned char cfg_641T_T111[3][27] = {
 unsigned char cfg_641T_T113[3] = {1, 6, 0};
 #endif
 
-#endif  /* __ATMEL_MXT641T_CFG_H */
+#endif  /* ATMEL_MXT641T_CFG_H */

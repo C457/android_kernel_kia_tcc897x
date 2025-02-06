@@ -1025,7 +1025,7 @@ error_inode:
 		sinfo.bh = NULL;
 	}
 	if (corrupt < 0) {
-		fat_fs_error(new_dir->i_sb,
+		fat_fs_error_ratelimit(new_dir->i_sb,
 			     "%s: Filesystem corrupted (i_pos %lld)",
 			     __func__, sinfo.i_pos);
 	}

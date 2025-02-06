@@ -28,5 +28,9 @@ int mmc_spi_set_crc(struct mmc_host *host, int use_crc);
 int mmc_bus_test(struct mmc_card *card, u8 bus_width);
 int mmc_send_hpi_cmd(struct mmc_card *card, u32 *status);
 
+#ifdef CONFIG_DAUDIO_KK
+int mmc_send_gen56_data(struct mmc_card *card, u8 *gen_buffer);
+#endif
+
 #endif
 

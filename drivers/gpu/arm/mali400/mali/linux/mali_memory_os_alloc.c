@@ -169,6 +169,11 @@ int mali_mem_os_alloc_pages(mali_mem_os_mem *os_mem, u32 size)
 				     size,
 				     atomic_read(&mali_mem_os_allocator.allocated_pages) * _MALI_OSK_MALI_PAGE_SIZE,
 				     mali_mem_os_allocator.allocation_limit));
+		printk("[MALI] %s:%d Unable to allocate %u bytes. Currently allocated: %lu, max limit %zu\n",
+		       __func__, __LINE__,
+		       size,
+		       atomic_read(&mali_mem_os_allocator.allocated_pages) * _MALI_OSK_MALI_PAGE_SIZE,
+		       mali_mem_os_allocator.allocation_limit);
 		return -ENOMEM;
 	}
 
@@ -227,6 +232,8 @@ int mali_mem_os_alloc_pages(mali_mem_os_mem *os_mem, u32 size)
 			os_mem->count = (page_count - remaining) + i;
 			atomic_add(os_mem->count, &mali_mem_os_allocator.allocated_pages);
 			mali_mem_os_free(&os_mem->pages, os_mem->count, MALI_FALSE);
+			printk("[MALI] %s:%d alloc_page(flags:0x%x) failed!! remaining:%d current:%d\n",
+			       __func__, __LINE__, flags, remaining, i);
 			return -ENOMEM;
 		}
 
@@ -238,6 +245,7 @@ int mali_mem_os_alloc_pages(mali_mem_os_mem *os_mem, u32 size)
 		if (unlikely(err)) {
 			MALI_DEBUG_PRINT_ERROR(("OS Mem: Failed to DMA map page %p: %u",
 						new_page, err));
+			printk("[MALI] %s:%d Failed to DMA map page %p: %u\n", __func__, __LINE__, new_page, err);
 			__free_page(new_page);
 			os_mem->count = (page_count - remaining) + i;
 			atomic_add(os_mem->count, &mali_mem_os_allocator.allocated_pages);
@@ -252,6 +260,7 @@ int mali_mem_os_alloc_pages(mali_mem_os_mem *os_mem, u32 size)
 		m_page = _mali_page_node_allocate(MALI_PAGE_NODE_OS);
 		if (unlikely(NULL == m_page)) {
 			MALI_PRINT_ERROR(("OS Mem: Can't allocate mali_page node! \n"));
+			printk("[MALI] %s:%d Can't allocate mali_page node!\n", __func__, __LINE__);
 			dma_unmap_page(&mali_platform_device->dev, page_private(new_page),
 				       _MALI_OSK_MALI_PAGE_SIZE, DMA_TO_DEVICE);
 			ClearPagePrivate(new_page);

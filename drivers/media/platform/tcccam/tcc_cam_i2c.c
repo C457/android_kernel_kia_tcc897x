@@ -61,19 +61,23 @@ struct cam_i2c_chip_info {
 	struct gpio_chip gpio_chip;
 };
 
-static int gpio_get_camera_variant(void)
+int gpio_get_camera_variant(void)
 {
 	int mode0, mode1, mode2;
+	int cam_type;
 
 	mode0 = gpio_get_value(TCC_GPB(22));
 	mode1 = gpio_get_value(TCC_GPB(19));
 	mode2 = gpio_get_value(TCC_GPB(23));
 
-	dprintk("mode0(0x%x), mode1(0x%x), mode2(0x%x), camera_type(0x%x) \n", \
-		mode0, mode1, mode2, camera_type);	
+	cam_type = (mode0<<2)|(mode1<<1)|mode2;
 
-	return (mode0<<2)|(mode1<<1)|mode2;
+	printk("mode0(0x%x), mode1(0x%x), mode2(0x%x), camera_type(0x%x) \n", \
+		mode0, mode1, mode2, cam_type);	
+
+	return cam_type;
 }
+EXPORT_SYMBOL(gpio_get_camera_variant);
 
 int get_camera_type(void)
 {
@@ -542,7 +546,7 @@ int DDI_I2C_Read(unsigned short reg, unsigned char reg_bytes, unsigned char *val
 			{
 				if(i2c_master_send(cam_i2c_client[vdev->CameraID], data, reg_bytes) != reg_bytes)
 				{
-					printk("write error for read!!!! \n");			
+				//	printk("write error for read!!!! \n");			
 					return -EIO; 
 				}
 
@@ -561,7 +565,7 @@ int DDI_I2C_Read(unsigned short reg, unsigned char reg_bytes, unsigned char *val
 
 				if(i2c_master_send(cam_i2c_client, data, reg_bytes) != reg_bytes)
 				{
-					printk("write error for read!!!! \n");			
+				//	printk("write error for read!!!! \n");			
 					return -EIO; 
 				}
 

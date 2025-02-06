@@ -31,6 +31,17 @@ enum PREVIEW_METHOD {
 	PREVIEW_DD,
 };
 
+// VIDIOC_CHECK_CAMERA_ERROR error code
+#define CAMERA_NO_ERR               0x0000 // No Error
+#define DES_IC_COMMUNICATION_ERR    0x0100 // A090201 - Sensor open error by the i2c communication
+#define SERDES_LOCK_ERR             0x0101 // A090101 - SERDES link error (GPIO_G06)
+#define SERDES_SIGNAL_ERR           0x0102 // A090101 - More than 255 DES errors occured (0xB0E - GMSL1_E)
+#define VIDEO_SIGNAL_ERR            0x0103 // A090301 - SoC DMA error
+
+#define SERDES_LOCK_FAIL 0
+#define SERDES_LOCK_NORMAL 1
+#define SERDES_I2C_FAIL 2
+
 struct rear_cam_misc {
 	// lcd panel
 	unsigned int lcd_width;
@@ -64,6 +75,13 @@ struct rear_cam_misc {
 	unsigned int draw_parking_line_height;
 };
 
+struct cam_error {
+	unsigned int des_ic_err;
+	unsigned int soc_dma_err;
+	unsigned int des_signal_err;
+	unsigned int des_lock_fail;
+};
+
 struct tcc_camera_device{
 	struct device_node *		camera_np;
 	struct video_device *		vfd;
@@ -74,6 +92,7 @@ struct tcc_camera_device{
 	struct TCC_VIOC 			vioc;
 	struct tccxxx_cif_buffer *	prev_buf;
 	struct v4l2_framebuffer 	fbuf;
+	struct cam_error			cam_err;
 
 	TCC_SENSOR_INFO_TYPE tcc_sensor_info;
 	SENSOR_FUNC_TYPE sensor_func;

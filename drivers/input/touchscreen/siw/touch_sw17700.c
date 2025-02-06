@@ -139,6 +139,11 @@ struct siw_touch_fw_bin chip_fw_bin_dis_12_3 = {
         .fw_size = sizeof(LA123WF7_SL03_0_07_img),
 };
 
+struct siw_touch_fw_bin chip_fw_bin_dis_curved_12_3 = {
+        .fw_data = NULL,
+        .fw_size = sizeof(NULL),
+};
+
 static const struct siw_hal_reg_quirk chip_reg_quirks[] = {
 	{ .old_addr = SPR_CHIP_TEST, .new_addr = 0x0BF, },
 	{ .old_addr = SPR_CHIP_ID, .new_addr = 0x100, },
@@ -170,7 +175,7 @@ static const struct siw_hal_reg_quirk chip_reg_quirks[] = {
 	{ .old_addr = ~0, .new_addr = ~0 },		// End signal
 };
 
-#if defined(__SIW_CONFIG_OF)
+#if defined(SIW_CONFIG_OF)
 /*
  * of_device_is_compatible(dev->of_node, CHIP_COMPATIBLE_NAME)
  */
@@ -205,7 +210,7 @@ enum CHIP_CAPABILITY {
 #if (CHIP_PIN_RESET == 0) || (CHIP_PIN_IRQ == 0)
 //	#error Assign external pin & flag first!!!
 #endif
-#endif	/* __SIW_CONFIG_OF */
+#endif	/* SIW_CONFIG_OF */
 
 /* use eg. cname=arc1 to change name */
 static char chip_name[32] = CHIP_DEVICE_NAME;
@@ -244,7 +249,7 @@ static const struct siw_touch_pdata chip_pdata = {
 		.bus_tx_dummy_size	= CHIP_TX_DUMMY_SZ,
 		.bus_rx_dummy_size	= CHIP_RX_DUMMY_SZ,
 	},
-#if defined(__SIW_CONFIG_OF)
+#if defined(SIW_CONFIG_OF)
 	.of_match_table 	= of_match_ptr(chip_match_ids),
 #else
 	.pins				= {
@@ -290,6 +295,7 @@ static const struct siw_touch_pdata chip_pdata = {
 	.fw_bin             = (void *)&chip_fw_bin,
 	.fw_bin_dis         = (void *)&chip_fw_bin_dis,
 	.fw_bin_dis_12_3    = (void *)&chip_fw_bin_dis_12_3,
+	.fw_bin_dis_curved_12_3 = (void *)&chip_fw_bin_dis_curved_12_3,
 };
 
 static struct siw_touch_chip_data chip_data = {
@@ -374,9 +380,9 @@ siw_chip_module_init(CHIP_DEVICE_NAME,
 
 MODULE_LICENSE("GPL");
 
-__siw_setup_str("siw_chip_name=", siw_setup_chip_name, chip_name);
-__siw_setup_str("siw_drv_name=", siw_setup_drv_name, chip_drv_name);
-__siw_setup_str("siw_idrv_name=", siw_setup_idrv_name, chip_idrv_name);
+def_siw_setup_str("siw_chip_name=", siw_setup_chip_name, chip_name);
+def_siw_setup_str("siw_drv_name=", siw_setup_drv_name, chip_drv_name);
+def_siw_setup_str("siw_idrv_name=", siw_setup_idrv_name, chip_idrv_name);
 
 
 

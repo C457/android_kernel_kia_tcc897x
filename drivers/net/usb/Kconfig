@@ -140,13 +140,7 @@ config USB_USBNET
 	  To compile this driver as a module, choose M here: the
 	  module will be called usbnet.
 
-config USB_LGIT_GOBIUSBNET
-	bool "LGIT GobiUSBNET Driver"
-	depends on USB_USBNET
-	help
-	  LGIT KT MODEM, GobiUSBNET Driver
-	  
-config USB_LGIT_RMNET_MULTI
+config USB_LGIT_MULTI_RMNET
 	bool "Multi Rmnet"
 	depends on USB_USBNET
 	help

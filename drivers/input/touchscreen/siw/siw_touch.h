@@ -9,8 +9,8 @@
  * version 2 as published by the Free Software Foundation.
  */
 
-#ifndef __SIW_TOUCH_H
-#define __SIW_TOUCH_H
+#ifndef SIW_TOUCH_H
+#define SIW_TOUCH_H
 
 #undef VERIFY_OCTAL_PERMISSIONS
 #define VERIFY_OCTAL_PERMISSIONS(perms) (perms)
@@ -37,11 +37,11 @@
 #include <linux/earlysuspend.h>
 #endif
 
-#if defined(__SIW_CONFIG_FB)
+#if defined(SIW_CONFIG_FB)
 #include <linux/fb.h>
 #endif
 
-#if defined(__SIW_SUPPORT_WAKE_LOCK)
+#if defined(SIW_SUPPORT_WAKE_LOCK)
 #include <linux/wakelock.h>
 #endif
 
@@ -74,6 +74,8 @@
 extern int LCD_TOUCH_INT_CHECK;
 extern int FW_UPDATE_RESULT;
 extern int siw_touch_cnt;
+extern int PRINT_SERDES_LOG;
+extern u8 siw_serdes_check_value[5];
 
 #define I2C_RETRY_COUNT 3
 
@@ -92,7 +94,7 @@ enum {
 	SIW_TOUCH_MAX_XFER_COUNT	= 10,
 };
 
-enum _SIW_BUS_IF {
+enum SIW_BUS_IF {
 	BUS_IF_I2C = 0,
 	BUS_IF_SPI,
 	BUS_IF_MAX,
@@ -629,7 +631,7 @@ enum {
 	KNOCK_OVERTAP,
 };
 
-enum _SIW_TOUCH_UEVENT {
+enum SIW_TOUCH_UEVENT {
 	TOUCH_UEVENT_KNOCK = 0,
 	TOUCH_UEVENT_PASSWD,
 	TOUCH_UEVENT_SWIPE_RIGHT,
@@ -681,23 +683,23 @@ struct siw_touch_pdata {
 	unsigned long irqflags;
 
 	unsigned long quirks;
-#define _CHIP_QUIRK_NOT_SUPPORT_XFER		(1L<<0)
+#define DEF_CHIP_QUIRK_NOT_SUPPORT_XFER		(1L<<0)
 
-#define _CHIP_QUIRK_NOT_SUPPORT_ASC			(1L<<16)
-#define _CHIP_QUIRK_NOT_SUPPORT_LPWG		(1L<<17)
-#define _CHIP_QUIRK_NOT_SUPPORT_WATCH		(1L<<18)
+#define DEF_CHIP_QUIRK_NOT_SUPPORT_ASC			(1L<<16)
+#define DEF_CHIP_QUIRK_NOT_SUPPORT_LPWG		(1L<<17)
+#define DEF_CHIP_QUIRK_NOT_SUPPORT_WATCH		(1L<<18)
 
-#define _CHIP_QUIRK_NOT_SUPPORT_IME			(1L<<28)
+#define DEF_CHIP_QUIRK_NOT_SUPPORT_IME			(1L<<28)
 
 	unsigned long abt_quirks;
-#define _ABT_QUIRK_RAW_RETURN_MODE_VAL		(1L<<0)
+#define DEF_ABT_QUIRK_RAW_RETURN_MODE_VAL		(1L<<0)
 
 	unsigned long prd_quirks;
-#define _PRD_QUIRK_RAW_RETURN_MODE_VAL		(1L<<0)
+#define DEF_PRD_QUIRK_RAW_RETURN_MODE_VAL		(1L<<0)
 
 	struct siw_touch_bus_info bus_info;
 
-#if defined(__SIW_CONFIG_OF)
+#if defined(SIW_CONFIG_OF)
 	const struct of_device_id *of_match_table;
 #else
 	struct touch_pins pins;
@@ -725,6 +727,7 @@ struct siw_touch_pdata {
 	void *fw_bin;
 	void *fw_bin_dis;
 	void *fw_bin_dis_12_3;
+	void *fw_bin_dis_curved_12_3;
 
 	void *font_bin;
 
@@ -744,21 +747,21 @@ struct siw_touch_chip_data {
 };
 
 enum {
-	CHIP_QUIRK_NOT_SUPPORT_XFER			= _CHIP_QUIRK_NOT_SUPPORT_XFER,
+	CHIP_QUIRK_NOT_SUPPORT_XFER			= DEF_CHIP_QUIRK_NOT_SUPPORT_XFER,
 	/* */
-	CHIP_QUIRK_NOT_SUPPORT_ASC			= _CHIP_QUIRK_NOT_SUPPORT_ASC,
-	CHIP_QUIRK_NOT_SUPPORT_LPWG			= _CHIP_QUIRK_NOT_SUPPORT_LPWG,
-	CHIP_QUIRK_NOT_SUPPORT_WATCH		= _CHIP_QUIRK_NOT_SUPPORT_WATCH,
+	CHIP_QUIRK_NOT_SUPPORT_ASC			= DEF_CHIP_QUIRK_NOT_SUPPORT_ASC,
+	CHIP_QUIRK_NOT_SUPPORT_LPWG			= DEF_CHIP_QUIRK_NOT_SUPPORT_LPWG,
+	CHIP_QUIRK_NOT_SUPPORT_WATCH		= DEF_CHIP_QUIRK_NOT_SUPPORT_WATCH,
 	/* */
-	CHIP_QUIRK_NOT_SUPPORT_IME			= _CHIP_QUIRK_NOT_SUPPORT_IME,
+	CHIP_QUIRK_NOT_SUPPORT_IME			= DEF_CHIP_QUIRK_NOT_SUPPORT_IME,
 };
 
 enum {
-	ABT_QUIRK_RAW_RETURN_MODE_VAL		= _ABT_QUIRK_RAW_RETURN_MODE_VAL,
+	ABT_QUIRK_RAW_RETURN_MODE_VAL		= DEF_ABT_QUIRK_RAW_RETURN_MODE_VAL,
 };
 
 enum {
-	PRD_QUIRK_RAW_RETURN_MODE_VAL		= _PRD_QUIRK_RAW_RETURN_MODE_VAL,
+	PRD_QUIRK_RAW_RETURN_MODE_VAL		= DEF_PRD_QUIRK_RAW_RETURN_MODE_VAL,
 };
 
 static inline unsigned long pdata_get_quirks(struct siw_touch_pdata *pdata)
@@ -954,6 +957,12 @@ static inline struct siw_touch_fw_bin *pdata_fw_bin_dis_12_3(
         return pdata->fw_bin_dis_12_3;
 }
 
+static inline struct siw_touch_fw_bin *pdata_fw_bin_dis_curved_12_3(
+                                                                struct siw_touch_pdata *pdata)
+{
+        return pdata->fw_bin_dis_curved_12_3;
+}
+
 static inline struct siw_touch_font_bin *pdata_font_bin(
 								struct siw_touch_pdata *pdata)
 {
@@ -1015,7 +1024,7 @@ struct siw_ts {
 	struct siw_touch_pdata *pdata;
 
 	struct kobject kobj;
-#if defined(__SIW_SUPPORT_WAKE_LOCK)
+#if defined(SIW_SUPPORT_WAKE_LOCK)
 	struct wake_lock lpwg_wake_lock;
 #endif
 	struct state_info state;
@@ -1043,16 +1052,16 @@ struct siw_ts {
 	const char *panel_spec;
 	const char *panel_spec_mfts;
 	u32 force_fwup;
-#define _FORCE_FWUP_CLEAR		0
-#define _FORCE_FWUP_ON			(1<<0)
-#define _FORCE_FWUP_SYS_SHOW	(1<<2)
-#define _FORCE_FWUP_SYS_STORE	(1<<3)
+#define DEF_FORCE_FWUP_CLEAR		0
+#define DEF_FORCE_FWUP_ON			(1<<0)
+#define DEF_FORCE_FWUP_SYS_SHOW	(1<<2)
+#define DEF_FORCE_FWUP_SYS_STORE	(1<<3)
 
 	/* __SIW_SUPPORT_WATCH */
 	const char *watch_font_image;
 	/* */
 
-	/* __SIW_SUPPORT_PRD */
+	/* SIW_SUPPORT_PRD */
 	const char *prd_in_file_path;
 	const char *prd_in_file_m_path;
 	const char *prd_out_file_path;
@@ -1087,7 +1096,7 @@ struct siw_ts {
 #if defined(__SIW_CONFIG_EARLYSUSPEND)
 	struct early_suspend early_suspend;
 #endif
-#if defined(__SIW_CONFIG_FB)
+#if defined(SIW_CONFIG_FB)
 	struct notifier_block fb_notif;
 #endif
 
@@ -1102,28 +1111,28 @@ struct siw_ts {
 	void *prd;
 
 	u32 flags;
-#define _IRQ_USE_WAKE				(1UL<<0)	/* unavailable */
-#define _IRQ_USE_SCHEDULE_WORK		(1UL<<1)
+#define DEF_IRQ_USE_WAKE				(1UL<<0)	/* unavailable */
+#define DEF_IRQ_USE_SCHEDULE_WORK		(1UL<<1)
 
-#define _TOUCH_USE_MON_THREAD		(1UL<<8)
-#define _TOUCH_USE_PINCTRL			(1UL<<9)
-#define _TOUCH_USE_PWRCTRL			(1UL<<10)
+#define DEF_TOUCH_USE_MON_THREAD		(1UL<<8)
+#define DEF_TOUCH_USE_PINCTRL			(1UL<<9)
+#define DEF_TOUCH_USE_PWRCTRL			(1UL<<10)
 
-#define _TOUCH_USE_VBLANK			(1UL<<12)
+#define DEF_TOUCH_USE_VBLANK			(1UL<<12)
 
-#define _TOUCH_USE_INPUT_PARENT		(1UL<<15)
+#define DEF_TOUCH_USE_INPUT_PARENT		(1UL<<15)
 
-#define _TOUCH_USE_VIRT_DIR_WATCH	(1UL<<16)
-#define _TOUCH_USE_DRV_NAME_SYSFS	(1UL<<17)
-#define _TOUCH_USE_FW_BINARY		(1UL<<18)
-#define _TOUCH_USE_FONT_BINARY		(1UL<<19)
+#define DEF_TOUCH_USE_VIRT_DIR_WATCH	(1UL<<16)
+#define DEF_TOUCH_USE_DRV_NAME_SYSFS	(1UL<<17)
+#define DEF_TOUCH_USE_FW_BINARY		(1UL<<18)
+#define DEF_TOUCH_USE_FONT_BINARY		(1UL<<19)
 
-#define _TOUCH_USE_PROBE_INIT_LATE	(1UL<<24)
+#define DEF_TOUCH_USE_PROBE_INIT_LATE	(1UL<<24)
 
-#define _TOUCH_SKIP_ESD_EVENT		(1UL<<28)
-#define _TOUCH_SKIP_RESET_PIN		(1UL<<29)
+#define DEF_TOUCH_SKIP_ESD_EVENT		(1UL<<28)
+#define DEF_TOUCH_SKIP_RESET_PIN		(1UL<<29)
 
-#define _TOUCH_IGNORE_DT_FLAGS		(1UL<<31)
+#define DEF_TOUCH_IGNORE_DT_FLAGS		(1UL<<31)
 
 	/* Input Device ID */
 	struct input_id i_id;
@@ -1132,7 +1141,7 @@ struct siw_ts {
 	struct siw_touch_operations *ops_ext;
 	struct siw_touch_operations ops_in;
 	struct siw_touch_operations *ops;
-	struct siw_hal_reg __reg;
+	struct siw_hal_reg var_reg;
 
 	/* */
 	int (*bus_init)(struct device *dev);
@@ -1167,48 +1176,48 @@ struct siw_ts {
 };
 
 enum {
-	FORCE_FWUP_CLEAR		= _FORCE_FWUP_CLEAR,
-	FORCE_FWUP_ON			= _FORCE_FWUP_ON,
-	FORCE_FWUP_SYS_SHOW		= _FORCE_FWUP_SYS_SHOW,
-	FORCE_FWUP_SYS_STORE	= _FORCE_FWUP_SYS_STORE,
+	FORCE_FWUP_CLEAR		= DEF_FORCE_FWUP_CLEAR,
+	FORCE_FWUP_ON			= DEF_FORCE_FWUP_ON,
+	FORCE_FWUP_SYS_SHOW		= DEF_FORCE_FWUP_SYS_SHOW,
+	FORCE_FWUP_SYS_STORE	= DEF_FORCE_FWUP_SYS_STORE,
 };
 
 enum {
-	IRQ_USE_WAKE				= _IRQ_USE_WAKE,
-	IRQ_USE_SCHEDULE_WORK		= _IRQ_USE_SCHEDULE_WORK,
+	IRQ_USE_WAKE				= DEF_IRQ_USE_WAKE,
+	IRQ_USE_SCHEDULE_WORK		= DEF_IRQ_USE_SCHEDULE_WORK,
 	/* */
-	TOUCH_USE_MON_THREAD		= _TOUCH_USE_MON_THREAD,
-	TOUCH_USE_PINCTRL			= _TOUCH_USE_PINCTRL,
-	TOUCH_USE_PWRCTRL			= _TOUCH_USE_PWRCTRL,
+	TOUCH_USE_MON_THREAD		= DEF_TOUCH_USE_MON_THREAD,
+	TOUCH_USE_PINCTRL			= DEF_TOUCH_USE_PINCTRL,
+	TOUCH_USE_PWRCTRL			= DEF_TOUCH_USE_PWRCTRL,
 	/* */
-	TOUCH_USE_VBLANK			= _TOUCH_USE_VBLANK,
-	TOUCH_USE_INPUT_PARENT		= _TOUCH_USE_INPUT_PARENT,
+	TOUCH_USE_VBLANK			= DEF_TOUCH_USE_VBLANK,
+	TOUCH_USE_INPUT_PARENT		= DEF_TOUCH_USE_INPUT_PARENT,
 	/* */
-	TOUCH_USE_VIRT_DIR_WATCH	= _TOUCH_USE_VIRT_DIR_WATCH,
-	TOUCH_USE_DRV_NAME_SYSFS	= _TOUCH_USE_DRV_NAME_SYSFS,
-	TOUCH_USE_FW_BINARY			= _TOUCH_USE_FW_BINARY,
-	TOUCH_USE_FONT_BINARY		= _TOUCH_USE_FONT_BINARY,
+	TOUCH_USE_VIRT_DIR_WATCH	= DEF_TOUCH_USE_VIRT_DIR_WATCH,
+	TOUCH_USE_DRV_NAME_SYSFS	= DEF_TOUCH_USE_DRV_NAME_SYSFS,
+	TOUCH_USE_FW_BINARY			= DEF_TOUCH_USE_FW_BINARY,
+	TOUCH_USE_FONT_BINARY		= DEF_TOUCH_USE_FONT_BINARY,
 	/* */
-	TOUCH_USE_PROBE_INIT_LATE	= _TOUCH_USE_PROBE_INIT_LATE,
+	TOUCH_USE_PROBE_INIT_LATE	= DEF_TOUCH_USE_PROBE_INIT_LATE,
 	/* */
-	TOUCH_SKIP_ESD_EVENT		= _TOUCH_SKIP_ESD_EVENT,
-	TOUCH_SKIP_RESET_PIN		= _TOUCH_SKIP_RESET_PIN,
+	TOUCH_SKIP_ESD_EVENT		= DEF_TOUCH_SKIP_ESD_EVENT,
+	TOUCH_SKIP_RESET_PIN		= DEF_TOUCH_SKIP_RESET_PIN,
 	/* */
-	TOUCH_IGNORE_DT_FLAGS		= _TOUCH_IGNORE_DT_FLAGS,
+	TOUCH_IGNORE_DT_FLAGS		= DEF_TOUCH_IGNORE_DT_FLAGS,
 };
 
 
 /* goes to siw_touch_init_work_func */
-#define __siw_touch_qd_init_work(_ts, _delay)	\
+#define siw_touch_qd_init_work(_ts, _delay)	\
 		queue_delayed_work(_ts->wq, &_ts->init_work, _delay)
 /* goes to siw_touch_upgrade_work_func */
-#define __siw_touch_qd_upgrade_work(_ts, _delay)	\
+#define siw_touch_qd_upgrade_work(_ts, _delay)	\
 		queue_delayed_work(_ts->wq, &_ts->upgrade_work, _delay)
 /* goes to siw_touch_atomic_notifer_work_func */
-#define __siw_touch_qd_notify_work(_ts, _delay)	\
+#define siw_touch_qd_notify_work(_ts, _delay)	\
 		queue_delayed_work(_ts->wq, &_ts->notify_work, _delay)
 /* goes to siw_touch_fb_work_func  */
-#define __siw_touch_qd_fb_work(_ts, _delay)	\
+#define siw_touch_qd_fb_work(_ts, _delay)	\
 		queue_delayed_work(_ts->wq, &_ts->fb_work, _delay)
 
 #if defined(__SIW_SUPPORT_ASC)
@@ -1221,35 +1230,35 @@ enum {
 #endif	/* __SIW_SUPPORT_ASC */
 
 /* goes to siw_touch_sys_reset_work_func  */
-#define __siw_touch_qd_sys_reset_work(_ts, _delay)	\
+#define siw_touch_qd_sys_reset_work(_ts, _delay)	\
 		queue_delayed_work(_ts->wq, &_ts->sys_reset_work, _delay)
 
 
 #define siw_touch_qd_init_work_now(_ts)	\
-		__siw_touch_qd_init_work(_ts, 0)
+		siw_touch_qd_init_work(_ts, 0)
 #define siw_touch_qd_init_work_jiffies(_ts, _jiffies)	\
-		__siw_touch_qd_init_work(_ts, msecs_to_jiffies(_jiffies))
+		siw_touch_qd_init_work(_ts, msecs_to_jiffies(_jiffies))
 #define siw_touch_qd_init_work_sw(_ts)	\
-		__siw_touch_qd_init_work(_ts,	\
+		siw_touch_qd_init_work(_ts,	\
 			msecs_to_jiffies(_ts->caps.sw_reset_delay))
 #define siw_touch_qd_init_work_hw(_ts)	\
-		__siw_touch_qd_init_work(_ts,	\
+		siw_touch_qd_init_work(_ts,	\
 			msecs_to_jiffies(_ts->caps.hw_reset_delay))
 
 #define siw_touch_qd_upgrade_work_now(_ts)	\
-		__siw_touch_qd_upgrade_work(_ts, 0)
+		siw_touch_qd_upgrade_work(_ts, 0)
 #define siw_touch_qd_upgrade_work_jiffies(_ts, _jiffies)	\
-		__siw_touch_qd_upgrade_work(_ts, msecs_to_jiffies(_jiffies))
+		siw_touch_qd_upgrade_work(_ts, msecs_to_jiffies(_jiffies))
 
 #define siw_touch_qd_notify_work_now(_ts)	\
-		__siw_touch_qd_notify_work(_ts, 0)
+		siw_touch_qd_notify_work(_ts, 0)
 #define siw_touch_qd_notify_work_jiffies(_ts, _jiffies)	\
-		__siw_touch_qd_notify_work(_ts, msecs_to_jiffies(_jiffies))
+		siw_touch_qd_notify_work(_ts, msecs_to_jiffies(_jiffies))
 
 #define siw_touch_qd_fb_work_now(_ts)	\
-		__siw_touch_qd_fb_work(_ts, 0)
+		siw_touch_qd_fb_work(_ts, 0)
 #define siw_touch_qd_fb_work_jiffies(_ts, _jiffies)	\
-		__siw_touch_qd_fb_work(_ts, msecs_to_jiffies(_jiffies))
+		siw_touch_qd_fb_work(_ts, msecs_to_jiffies(_jiffies))
 
 #if defined(__SIW_SUPPORT_ASC)
 #define siw_touch_qd_toggle_delta_work_now(_ts)	\
@@ -1264,9 +1273,9 @@ enum {
 #endif	/* __SIW_SUPPORT_ASC */
 
 #define siw_touch_qd_sys_reset_work_now(_ts)	\
-		__siw_touch_qd_sys_reset_work(_ts, 0)
+		siw_touch_qd_sys_reset_work(_ts, 0)
 #define siw_touch_qd_sys_reset_work_jiffies(_ts, _jiffies)	\
-		__siw_touch_qd_sys_reset_work(_ts, msecs_to_jiffies(_jiffies))
+		siw_touch_qd_sys_reset_work(_ts, msecs_to_jiffies(_jiffies))
 
 
 
@@ -1276,18 +1285,21 @@ struct siw_touch_attribute {
 	ssize_t (*store)(struct device *dev, const char *buf, size_t count);
 };
 
-#define __TOUCH_ATTR(_name, _attr, _show, _store)		\
+#define DEF_TOUCH_ATTR(_name, _attr, _show, _store)		\
 			struct siw_touch_attribute touch_attr_##_name	\
 			= __ATTR(_name, _attr, _show, _store)
 
 #if defined(__SIW_ATTR_PERMISSION_ALL)
-#define __TOUCH_DEFAULT_PERM	(S_IRUGO | S_IWUGO)
+#define DEF_TOUCH_DEFAULT_PERM   (S_IRUGO | S_IWUSR | S_IWGRP)
 #else
-#define __TOUCH_DEFAULT_PERM	(S_IRUGO | S_IWUGO)
+#define DEF_TOUCH_DEFAULT_PERM   (S_IRUGO | S_IWUSR | S_IWGRP)
 #endif
 
 #define TOUCH_ATTR(_name, _show, _store)	\
-			__TOUCH_ATTR(_name, __TOUCH_DEFAULT_PERM, _show, _store)
+			DEF_TOUCH_ATTR(_name, DEF_TOUCH_DEFAULT_PERM, _show, _store)
+
+#define TOUCH_ATTR_FW_UPDATE(_name, _show, _store)        \
+			DEF_TOUCH_ATTR(_name, (S_IRUGO | S_IWUGO), _show, _store)
 
 
 static inline void touch_set_dev_data(struct siw_ts *ts, void *data)
@@ -1473,6 +1485,12 @@ static inline struct siw_touch_fw_bin *touch_fw_bin_dis_12_3(
                                                                 struct siw_ts *ts)
 {
         return pdata_fw_bin_dis_12_3(ts->pdata);
+}
+
+static inline struct siw_touch_fw_bin *touch_fw_bin_dis_curved_12_3(
+                                                                struct siw_ts *ts)
+{
+        return pdata_fw_bin_dis_curved_12_3(ts->pdata);
 }
 
 
@@ -1695,7 +1713,7 @@ struct siw_op_dbg {
 		.flags = _flags,	\
 	}
 
-static inline int __siw_touch_op_dbg(struct siw_op_dbg *op,
+static inline int siw_touch_op_dbg(struct siw_op_dbg *op,
 						void *data)
 {
 	int ret = 0;
@@ -1708,7 +1726,7 @@ static inline int __siw_touch_op_dbg(struct siw_op_dbg *op,
 	return ret;
 }
 
-#define __siw_snprintf(_buf, _buf_max, _size, _fmt, _args...) \
+#define def_siw_snprintf(_buf, _buf_max, _size, _fmt, _args...) \
 		({	\
 			int _n_size = 0;	\
 			if (_size < _buf_max)	\
@@ -1719,7 +1737,7 @@ static inline int __siw_touch_op_dbg(struct siw_op_dbg *op,
 
 
 #define siw_snprintf(_buf, _size, _fmt, _args...) \
-		__siw_snprintf(_buf, PAGE_SIZE, _size, _fmt, ##_args)
+		def_siw_snprintf(_buf, PAGE_SIZE, _size, _fmt, ##_args)
 
 
 extern u32 t_mfts_lpwg;
@@ -1728,12 +1746,13 @@ extern u32 t_lpwg_screen;
 extern u32 t_lpwg_sensor;
 extern u32 t_lpwg_qcover;
 
-extern int serdes_line_fault_check_test(struct i2c_client *client, int delay);
 extern void siw_hal_set_gpio_reset(struct device *dev, int val);
 extern void siw_serdes_reset_dwork_stop(struct siw_ts *ts);
 extern void siw_serdes_reset_dwork_start(struct siw_ts *ts);
-extern int serdes_i2c_reset(struct siw_ts *ts, bool des_only);
-extern int serdes_i2c_show(struct siw_ts *ts);
+extern int serdes_i2c_reset(struct i2c_client *client, bool des_only);
+extern int serdes_i2c_show(struct i2c_client *client);
+extern int siw_serdes_i2c_connect(struct i2c_client *client);
+extern int siw_serdes_line_fault_check(struct i2c_client *client);
 extern void siw_serdes_block_touch_irq(struct siw_ts *ts);
 extern void siw_serdes_unblock_touch_irq(struct siw_ts *ts);
 extern int ser_i2c_bitrate_3gbps_to_6gbps(struct i2c_client *client);
@@ -1741,10 +1760,25 @@ extern int des_i2c_bitrate_3gbps_to_6gbps(struct i2c_client *client);
 extern int serdes_i2c_bitrate_6gbps_to_3gbps(struct i2c_client *client);
 extern int des_i2c_bitrate_check(struct i2c_client *client);
 extern int ser_i2c_bitrate_check(struct i2c_client *client);
-extern int des_i2c_bitrate_reset(struct i2c_client *client);
-extern int ser_i2c_bitrate_reset(struct i2c_client *client);
+extern int serdes_video_signal_check(struct i2c_client *client, int lock_bit);
 int mobis_touch_update_check(void);
 void mobis_touch_update_complete(void);
+void mobis_serdes_status_count_reset(void);
+void mobis_serdes_status_count_update(u8 *serdes_check_value_arr, int lock_pin, int line_fault);
+void mobis_serdes_status_count_read(char *buffer);
+void mobis_serdes_status_count_write(char *buffer);
+void mobis_serdes_need_log(void);
+void mobis_show_need_log_count(void);
+bool mobis_touch_counter_flag_check(int id);
+void mobis_touch_counter_press(char *buf, int id);
+void mobis_touch_counter_release(char *buf, int id);
+void mobis_touch_counter_print(void);
+void mobis_touch_counter_reset(void);
+u8 mobis_idtc_check_read(void);
+void mobis_idtc_check_write(u8 *serdes_check_value_arr, int lock_pin, int line_fault, bool touch_watchdog, bool touch_crc_err);
+#if defined(CONFIG_WIDE_PE_COMMON)
+int get_lcd_type(struct i2c_client *client);
+#endif
 
 extern int siw_setup_params(struct siw_ts *ts, struct siw_touch_pdata *pdata);
 
@@ -1843,7 +1877,7 @@ static inline void siwmon_submit_ops(struct device *dev, char *ops, void *data, 
 		} while (0)
 
 #if !defined(MODULE)
-#define __siw_setup_u32(_name, _fn, _var)	\
+#define def_siw_setup_u32(_name, _fn, _var)	\
 		static int __init _fn(char *in_str)	\
 		{	\
 			_var = (u32)simple_strtol(in_str, NULL, 0);	\
@@ -1851,7 +1885,7 @@ static inline void siwmon_submit_ops(struct device *dev, char *ops, void *data, 
 		}	\
 		__setup(_name, _fn)
 
-#define __siw_setup_str(_name, _fn, _var)	\
+#define def_siw_setup_str(_name, _fn, _var)	\
 		static int __init _fn(char *in_str)	\
 		{	\
 			strlcpy(_var, in_str, sizeof(_var));	\
@@ -1859,8 +1893,8 @@ static inline void siwmon_submit_ops(struct device *dev, char *ops, void *data, 
 		}	\
 		__setup(_name, _fn)
 #else	/* MODULE */
-#define __siw_setup_u32(_name, _fn, _var)
-#define __siw_setup_str(_name, _fn, _var)
+#define def_siw_setup_u32(_name, _fn, _var)
+#define def_siw_setup_str(_name, _fn, _var)
 #endif	/* MODULE */
 
 #define siw_chip_module_init(_name, _data, _desc, _author)	\
@@ -1883,4 +1917,4 @@ static inline void siwmon_submit_ops(struct device *dev, char *ops, void *data, 
 		MODULE_VERSION(SIW_DRV_VERSION);	\
 		MODULE_LICENSE("GPL");
 
-#endif /* __SIW_TOUCH_H */
+#endif /* SIW_TOUCH_H */

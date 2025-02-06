@@ -234,7 +234,7 @@ typedef struct tcc_sensor_info
 
 #ifdef CONFIG_DAUDIO //mhjung
 #define USING_HW_I2C
-    #if defined(CONFIG_BOARD3HW_GPIO)
+    #if defined(INCLUDE_BOARD3HW_GPIO)
     #include "atv/tw9990.h"
     #include "atv/daudio_lvds.h"
     #else

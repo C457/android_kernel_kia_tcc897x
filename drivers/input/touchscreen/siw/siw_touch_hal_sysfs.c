@@ -61,7 +61,7 @@
 int siw_debug;
 int siw_touch_cnt = 5;
 
-static int __show_reg_list(struct device *dev, char *buf, int size)
+static int ori_show_reg_list(struct device *dev, char *buf, int size)
 {
 	struct siw_touch_chip *chip = to_touch_chip(dev);
 //	struct siw_ts *ts = chip->ts;
@@ -190,7 +190,7 @@ static int __show_reg_list(struct device *dev, char *buf, int size)
 	}
 #endif	/* __SIW_SUPPORT_WATCH */
 
-	/* __SIW_SUPPORT_PRD */
+	/* SIW_SUPPORT_PRD */
 	size += _reg_snprintf(buf, size, reg, prd_serial_tcm_offset);
 	size += _reg_snprintf(buf, size, reg, prd_tc_mem_sel);
 	size += _reg_snprintf(buf, size, reg, prd_tc_test_mode_ctl);
@@ -203,7 +203,7 @@ static int __show_reg_list(struct device *dev, char *buf, int size)
 	return size;
 }
 
-static ssize_t _show_reg_list(struct device *dev, char *buf)
+static ssize_t show_reg_list(struct device *dev, char *buf)
 {
 	struct siw_touch_chip *chip = to_touch_chip(dev);
 //	struct siw_ts *ts = chip->ts;
@@ -219,7 +219,7 @@ static ssize_t _show_reg_list(struct device *dev, char *buf)
 		return (ssize_t)ret;
 	}
 
-	size += __show_reg_list(dev, buf, size);
+	size += ori_show_reg_list(dev, buf, size);
 
 	size += siw_snprintf(buf, size, "\n");
 
@@ -249,9 +249,9 @@ static ssize_t _show_reg_list(struct device *dev, char *buf)
 	boot_chk_offset = siw_hal_boot_sts_pos_busy(chip);
 	size += siw_snprintf(buf, size,
 				">> flash boot : %s(%s), crc %s  (0x%08X)\n",
-				(bootmode >> (boot_chk_offset) & 0x1) ? "BUSY" : "idle",
-				(bootmode >> (boot_chk_offset + 1) & 0x1) ? "done" : "booting",
-				(bootmode >> (boot_chk_offset + 2) & 0x1) ? "ERROR" : "ok",
+				((bootmode >> (boot_chk_offset)) & 0x1) ? "BUSY" : "idle",
+				((bootmode >> (boot_chk_offset + 1)) & 0x1) ? "done" : "booting",
+				((bootmode >> (boot_chk_offset + 2)) & 0x1) ? "ERROR" : "ok",
 				bootmode);
 
 	size += siw_snprintf(buf, size,
@@ -269,7 +269,7 @@ static ssize_t _show_reg_list(struct device *dev, char *buf)
 #define REG_BURST_MAX			512
 #define REG_BURST_COL_PWR		4
 
-static int __show_reg_ctrl_log_history(struct device *dev, char *buf)
+static int ori_show_reg_ctrl_log_history(struct device *dev, char *buf)
 {
 	struct siw_touch_chip *chip = to_touch_chip(dev);
 //	struct siw_ts *ts = chip->ts;
@@ -309,13 +309,13 @@ static int __show_reg_ctrl_log_history(struct device *dev, char *buf)
 	return size;
 }
 
-static ssize_t _show_reg_ctrl(struct device *dev, char *buf)
+static ssize_t show_reg_ctrl(struct device *dev, char *buf)
 {
 //	struct siw_touch_chip *chip = to_touch_chip(dev);
 //	struct siw_ts *ts = chip->ts;
 	int size = 0;
 
-	size += __show_reg_ctrl_log_history(dev, buf);
+	size += ori_show_reg_ctrl_log_history(dev, buf);
 
 	size += siw_snprintf(buf, size, "\n[Usage]\n");
 	size += siw_snprintf(buf, size, " echo wr 0x1234 {value} > reg_ctrl\n");
@@ -327,7 +327,7 @@ static ssize_t _show_reg_ctrl(struct device *dev, char *buf)
 	return (ssize_t)size;
 }
 
-static void __store_reg_ctrl_log_add(struct device *dev,
+static void ori_store_reg_ctrl_log_add(struct device *dev,
 				struct siw_hal_reg_log *new_log)
 
 {
@@ -338,14 +338,14 @@ static void __store_reg_ctrl_log_add(struct device *dev,
 	memcpy(reg_log, new_log, sizeof(*reg_log));
 }
 
-static inline void __store_reg_ctrl_rd_burst_log(struct device *dev,
+static inline void ori_store_reg_ctrl_rd_burst_log(struct device *dev,
 					u8 *row_buf, int row, int col)
 {
 	if (col)
 		t_dev_info(dev, "rd: [%3Xh] %*ph\n", row, col, row_buf);
 }
 
-static int __store_reg_ctrl_rd_burst(struct device *dev, u32 addr, int size)
+static int ori_store_reg_ctrl_rd_burst(struct device *dev, u32 addr, int size)
 {
 	u8 *rd_buf, *row_buf;
 	int col_power = REG_BURST_COL_PWR;
@@ -373,7 +373,7 @@ static int __store_reg_ctrl_rd_burst(struct device *dev, u32 addr, int size)
 	while (size) {
 		col_curr = min(col_width, size);
 
-		__store_reg_ctrl_rd_burst_log(dev, row_buf, row_curr, col_curr);
+		ori_store_reg_ctrl_rd_burst_log(dev, row_buf, row_curr, col_curr);
 
 		row_buf += col_curr;
 		row_curr += col_curr;
@@ -386,7 +386,7 @@ out:
 	return ret;
 }
 
-static ssize_t _store_reg_ctrl(struct device *dev,
+static ssize_t store_reg_ctrl(struct device *dev,
 				const char *buf, size_t count)
 {
 //	struct siw_ts *ts = to_touch_core(dev);
@@ -401,7 +401,10 @@ static ssize_t _store_reg_ctrl(struct device *dev,
 
 	if (sscanf(buf, "%5s %X %X", command, &reg, &value) <= 0) {
 		siw_hal_sysfs_err_invalid_param(dev);
-		return count;
+		if(count < INT_MAX)
+	                return count;
+	        else
+	                return INT_MAX;
 	}
 
 	if (!strcmp(command, "wr") ||
@@ -429,7 +432,7 @@ static ssize_t _store_reg_ctrl(struct device *dev,
 		} else {
 			reg_log.dir |= REG_DIR_ERR;
 		}
-		__store_reg_ctrl_log_add(dev, &reg_log);
+		ori_store_reg_ctrl_log_add(dev, &reg_log);
 		goto out;
 	} else if (!wr) {
 		reg_log.dir = REG_DIR_RD;
@@ -446,12 +449,12 @@ static ssize_t _store_reg_ctrl(struct device *dev,
 			}
 		} else {
 			reg_log.dir |= (REG_DIR_ERR<<1);
-			ret = __store_reg_ctrl_rd_burst(dev, reg_addr, value);
+			ret = ori_store_reg_ctrl_rd_burst(dev, reg_addr, value);
 		}
 		if (ret < 0) {
 			reg_log.dir |= REG_DIR_ERR;
 		}
-		__store_reg_ctrl_log_add(dev, &reg_log);
+		ori_store_reg_ctrl_log_add(dev, &reg_log);
 		goto out;
 	}
 
@@ -463,7 +466,10 @@ static ssize_t _store_reg_ctrl(struct device *dev,
 		REG_BURST_MAX);
 
 out:
-	return count;
+	if(count < INT_MAX)
+                return count;
+        else
+                return INT_MAX;
 }
 
 #if defined(__SIW_CONFIG_KNOCK)
@@ -506,18 +512,27 @@ static ssize_t _store_tci_debug(struct device *dev,
 
 	if (!chip->opt.t_chk_tci_debug) {
 		t_dev_info(dev, "This chipset doesn't support tci debugging\n");
-		return count;
+		if(count < INT_MAX)
+	                return count;
+	        else
+	                return INT_MAX;
 	}
 
 	if (sscanf(buf, "%d", &value) <= 0) {
 		siw_hal_sysfs_err_invalid_param(dev);
-		return count;
+		if(count < INT_MAX)
+	                return count;
+	        else
+	                return INT_MAX;
 	}
 
 	chip->tci_debug_type = (u8)!!value;
 	t_dev_info(dev, "TCI-Debug %s\n", (value) ? "Enabled" : "Disabled");
 
-	return count;
+	if(count < INT_MAX)
+                return count;
+        else
+                return INT_MAX
 }
 
 static ssize_t _show_lcd_mode(struct device *dev, char *buf)
@@ -540,7 +555,10 @@ static ssize_t _store_lcd_mode(struct device *dev,
 
 	if (sscanf(buf, "%d", &value) <= 0) {
 		siw_hal_sysfs_err_invalid_param(dev);
-		return count;
+		if(count < INT_MAX)
+	                return count;
+	        else
+	                return INT_MAX;
 	}
 
 	t_dev_info(dev, "try to change driving mode: %s -> %s\n",
@@ -548,7 +566,10 @@ static ssize_t _store_lcd_mode(struct device *dev,
 			siw_lcd_driving_mode_str(value));
 	siw_ops_notify(ts, LCD_EVENT_LCD_MODE, &value);
 
-	return count;
+	if(count < INT_MAX)
+                return count;
+        else
+                return INT_MAX;
 }
 
 #endif	/* __SIW_CONFIG_KNOCK */
@@ -595,23 +616,32 @@ static ssize_t _store_swipe_debug(struct device *dev,
 
 	if (sscanf(buf, "%d", &value) <= 0) {
 		siw_hal_sysfs_err_invalid_param(dev);
-		return count;
+		if(count < INT_MAX )
+	                return count;
+	        else
+	                return INT_MAX;
 	}
 
 	if (value > 2 || value < 0) {
 		t_dev_err(dev, "SET SWIPE debug reason wrong, 0, 1, 2 only\n");
-		return count;
+		if(count < INT_MAX)
+	                return count;
+	        else
+	                return INT_MAX;
 	}
 
 	chip->swipe_debug_type = (u8)value;
 	t_dev_info(dev, "Write SWIPE Debug reason type = %s\n",
 			siw_hal_debug_type_str[value]);
 
-	return count;
+	if(count < INT_MAX)
+                return count;
+        else
+                return INT_MAX;
 }
 #endif	/* __SIW_CONFIG_SWIPE */
 
-static ssize_t _show_reset_ctrl(struct device *dev, char *buf)
+static ssize_t show_reset_ctrl(struct device *dev, char *buf)
 {
 	int size = 0;
 
@@ -633,7 +663,7 @@ static ssize_t _show_reset_ctrl(struct device *dev, char *buf)
 	return size;
 }
 
-static ssize_t _store_reset_xxx(struct device *dev, int type)
+static ssize_t store_reset_xxx(struct device *dev, int type)
 {
 	struct siw_touch_chip *chip = to_touch_chip(dev);
 	struct siw_ts *ts = chip->ts;
@@ -649,30 +679,36 @@ out:
 	return 0;
 }
 
-static ssize_t _store_reset_ctrl(struct device *dev,
+static ssize_t store_reset_ctrl(struct device *dev,
 				const char *buf, size_t count)
 {
 	int value = 0;
 
 	if (sscanf(buf, "%X", &value) <= 0) {
 		siw_hal_sysfs_err_invalid_param(dev);
-		return count;
+		if(count < INT_MAX)
+	                return count;
+	        else
+	                return INT_MAX;
 	}
 
-	_store_reset_xxx(dev, value);
+	store_reset_xxx(dev, value);
 
-	return count;
+	if(count < INT_MAX)
+                return count;
+        else
+                return INT_MAX;
 }
 
-#if defined(__SIW_ATTR_RST_BY_READ)
-static ssize_t _show_reset_sw(struct device *dev, char *buf)
+#if defined(SIW_ATTR_RST_BY_READ)
+static ssize_t show_reset_sw(struct device *dev, char *buf)
 {
-	return _store_reset_xxx(dev, SW_RESET);
+	return store_reset_xxx(dev, SW_RESET);
 }
 
-static ssize_t _show_reset_hw(struct device *dev, char *buf)
+static ssize_t show_reset_hw(struct device *dev, char *buf)
 {
-	return _store_reset_xxx(dev, HW_RESET_SYNC);
+	return store_reset_xxx(dev, HW_RESET_SYNC);
 }
 #endif
 
@@ -778,7 +814,7 @@ static ssize_t _show_debug_bus(struct device *dev, char *buf)
 
 	siw_touch_mon_pause(dev);
 
-#if defined(__SIW_SUPPORT_WAKE_LOCK)
+#if defined(SIW_SUPPORT_WAKE_LOCK)
 	wake_lock_timeout(&ts->lpwg_wake_lock, msecs_to_jiffies(1000));
 #endif
 
@@ -808,7 +844,7 @@ out:
 }
 #endif	/* __SIW_USE_BUS_TEST */
 
-static const char *__debug_hal_delay_str[] = {
+static const char *debug_hal_delay_str[] = {
 	[HAL_DBG_DLY_TC_DRIVING_0]	= "(Group - TC Driving)",
 	[HAL_DBG_DLY_FW_0]			= "(Group - FW)",
 	[HAL_DBG_DLY_HW_RST_0]		= "(Group - Reset)",
@@ -816,7 +852,7 @@ static const char *__debug_hal_delay_str[] = {
 	[HAL_DBG_DLY_LPWG]			= "(Group - LPWG)",
 };
 
-static ssize_t _show_debug_hal(struct device *dev, char *buf)
+static ssize_t show_debug_hal(struct device *dev, char *buf)
 {
 	struct siw_touch_chip *chip = to_touch_chip(dev);
 //	struct siw_ts *ts = chip->ts;
@@ -832,7 +868,7 @@ static ssize_t _show_debug_hal(struct device *dev, char *buf)
 		case HAL_DBG_DLY_HW_RST_0:
 		case HAL_DBG_DLY_NOTIFY:
 		case HAL_DBG_DLY_LPWG:
-			str = (char *)__debug_hal_delay_str[i];
+			str = (char *)debug_hal_delay_str[i];
 			break;
 		default:
 			str = "";
@@ -845,7 +881,7 @@ static ssize_t _show_debug_hal(struct device *dev, char *buf)
 	return (ssize_t)size;
 }
 
-static int _store_debug_hal_delay(struct device *dev, int sel, int val, int opt)
+static int store_debug_hal_delay(struct device *dev, int sel, int val, int opt)
 {
 	struct siw_touch_chip *chip = to_touch_chip(dev);
 	struct siw_hal_debug *dbg = &chip->dbg;
@@ -863,7 +899,7 @@ static int _store_debug_hal_delay(struct device *dev, int sel, int val, int opt)
 	return 0;
 }
 
-static ssize_t _store_debug_hal(struct device *dev,
+static ssize_t store_debug_hal(struct device *dev,
 				const char *buf, size_t count)
 {
 //	struct siw_touch_chip *chip = to_touch_chip(dev);
@@ -876,7 +912,10 @@ static ssize_t _store_debug_hal(struct device *dev,
 
 	if (sscanf(buf, "%X %X %X %X", &code, &sel, &val, &opt) <= 0) {
 		siw_hal_sysfs_err_invalid_param(dev);
-		return count;
+		if(count < INT_MAX)
+	                return count;
+	        else
+	                return INT_MAX;
 	}
 
 	t_dev_info(dev, "debug_hal: code %Xh, sel %Xh, val %Xh, opt %Xh\n",
@@ -884,16 +923,19 @@ static ssize_t _store_debug_hal(struct device *dev,
 
 	switch (code) {
 	case HAL_DBG_GRP_0:
-		ret = _store_debug_hal_delay(dev, sel, val, opt);
+		ret = store_debug_hal_delay(dev, sel, val, opt);
 		break;
 	default:
 		break;
 	}
 
-	return count;
+	if(count < INT_MAX)
+                return count;
+        else
+                return INT_MAX;
 }
 
-#if defined(__SIW_SUPPORT_ALIVE_DETECTION)
+#if defined(SIW_SUPPORT_ALIVE_DETECTION)
 u32 __weak t_alive_dbg_mask;	//instead of using extern
 
 int __weak siw_hal_alive_level_get(struct device *dev)
@@ -911,7 +953,7 @@ void __weak siw_hal_irq_count_clr(struct device *dev)
 
 }
 
-static ssize_t _show_alive_debug(struct device *dev, char *buf)
+static ssize_t show_alive_debug(struct device *dev, char *buf)
 {
 //	struct siw_ts *ts = to_touch_core(dev);
 	int size = 0;
@@ -927,7 +969,7 @@ static ssize_t _show_alive_debug(struct device *dev, char *buf)
 	return (ssize_t)size;
 }
 
-static ssize_t _store_alive_debug(struct device *dev,
+static ssize_t store_alive_debug(struct device *dev,
 				const char *buf, size_t count)
 {
 //	struct siw_ts *ts = to_touch_core(dev);
@@ -935,7 +977,10 @@ static ssize_t _store_alive_debug(struct device *dev,
 
 	if (sscanf(buf, "%X", &new_value) <= 0) {
 		siw_hal_sysfs_err_invalid_param(dev);
-		return count;
+		if(count < INT_MAX)
+	                return count;
+	        else
+	                return INT_MAX;
 	}
 
 	old_value = t_alive_dbg_mask;
@@ -943,10 +988,13 @@ static ssize_t _store_alive_debug(struct device *dev,
 	t_dev_info(dev, "t_alive_dbg_mask changed : %08Xh -> %08Xh\n",
 		old_value, new_value);
 
-	return count;
+	if(count < INT_MAX)
+                return count;
+        else
+                return INT_MAX;
 }
 
-static ssize_t _show_alive_count(struct device *dev, char *buf)
+static ssize_t show_alive_count(struct device *dev, char *buf)
 {
 	struct siw_touch_chip *chip = to_touch_chip(dev);
 	int size = 0;
@@ -960,7 +1008,7 @@ static ssize_t _show_alive_count(struct device *dev, char *buf)
 	return (ssize_t)size;
 }
 
-static ssize_t _store_alive_count(struct device *dev,
+static ssize_t store_alive_count(struct device *dev,
 				const char *buf, size_t count)
 {
 //	struct siw_ts *ts = to_touch_core(dev);
@@ -968,17 +1016,23 @@ static ssize_t _store_alive_count(struct device *dev,
 
 	if (sscanf(buf, "%s", string) <= 0) {
 		siw_hal_sysfs_err_invalid_param(dev);
-		return count;
+		if(count < INT_MAX)
+	                return count;
+	        else
+	                return INT_MAX;
 	}
 
 	if (!strcmp(string, "reset")) {
 		siw_hal_irq_count_clr(dev);
 	}
 
-	return count;
+	if(count < INT_MAX)
+                return count;
+        else
+                return INT_MAX;
 }
 
-static ssize_t _show_alive_level(struct device *dev, char *buf)
+static ssize_t show_alive_level(struct device *dev, char *buf)
 {
 	int size = 0;
 	int level = siw_hal_alive_level_get(dev);
@@ -988,58 +1042,76 @@ static ssize_t _show_alive_level(struct device *dev, char *buf)
 	return size;
 }
 
-static ssize_t _store_alive_level(struct device *dev,
+static ssize_t store_alive_level(struct device *dev,
 			const char *buf, size_t count)
 {
 	int level = 0;
 
 	if (sscanf(buf, "%d", &level) <= 0) {
 		siw_hal_sysfs_err_invalid_param(dev);
-		return count;
+		if(count < INT_MAX)
+	                return count;
+	        else
+	                return INT_MAX;
 	}
 
 	siw_hal_alive_level_set(dev, level);
 
-	return count;
+	if(count < INT_MAX)
+                return count;
+        else
+                return INT_MAX;
 }
 
-static ssize_t _show_power_off(struct device *dev,char *buf)
+static ssize_t show_power_off(struct device *dev,char *buf)
 {
 	siw_hal_set_gpio_reset(dev, GPIO_OUT_ZERO);
+
+	return 0;
 }
 
-static ssize_t _show_power_on(struct device *dev,char *buf)
+static ssize_t show_power_on(struct device *dev,char *buf)
 {
 	siw_hal_set_gpio_reset(dev, GPIO_OUT_ONE);
+
+	return 0;
 }
 
-static ssize_t _show_recovery_off(struct device *dev,char *buf)
+static ssize_t show_recovery_off(struct device *dev,char *buf)
 {
 	struct siw_touch_chip *chip = to_touch_chip(dev);
 	printk("%s [Start]\n",__func__);
 	siw_serdes_reset_dwork_stop(chip->ts);
+
+	return 0;
 }
 
-static ssize_t _show_recovery_on(struct device *dev,char *buf)
+static ssize_t show_recovery_on(struct device *dev,char *buf)
 {
 	struct siw_touch_chip *chip = to_touch_chip(dev);
 	printk("%s [Start]\n",__func__);
 	siw_serdes_reset_dwork_start(chip->ts);
+
+	return 0;
 }
 
-static ssize_t _show_debug(struct device *dev,char *buf)
+static ssize_t show_debug(struct device *dev,char *buf)
 {
         return snprintf(buf, PAGE_SIZE, "CURRENT DEBUG MODE : %d\n"
                                         "0:NONE\n" "1:INFO\n"
                                         "2:MESSAGES\n" "3:TRACE\n \t4:INTURRUPT\n", siw_debug);
+
+	return 0;
 }
 
-static ssize_t _set_debug(struct device *dev, const char *buf, size_t count)
+static ssize_t set_debug(struct device *dev, const char *buf, size_t count)
 {
         int state;
 
-        sscanf(buf, "%d", &state);
-        if (state >= DEBUG_NONE && state <= DEBUG_INT) {
+        if(sscanf(buf, "%d", &state) < 0)
+		return -EINVAL;
+
+        if ((state >= DEBUG_NONE) && (state <= DEBUG_INT)) {
 		
 		switch(state){
 			case 0 :
@@ -1072,90 +1144,100 @@ static ssize_t _set_debug(struct device *dev, const char *buf, size_t count)
                 return -EINVAL;
         }
 
-        return count;
+	if(count < INT_MAX)
+                return count;
+        else
+                return INT_MAX;
 }
 
-static ssize_t _show_serdes_setting(struct device *dev, const char *buf)
+static ssize_t show_serdes_setting(struct device *dev, const char *buf)
 {
         struct siw_touch_chip *chip = to_touch_chip(dev);
         struct siw_ts *ts = chip->ts;
+	struct i2c_client *client = to_i2c_client(dev);
 
 	siw_serdes_reset_dwork_stop(chip->ts);
 	mutex_lock(&ts->serdes.lock);
-	siw_touch_irq_control(dev, INTERRUPT_DISABLE);
+	mutex_lock(&ts->lock);
 
-        serdes_i2c_show(ts);
+        serdes_i2c_show(client);
 
-	siw_touch_irq_control(dev, INTERRUPT_ENABLE);
+	mutex_unlock(&ts->lock);
         mutex_unlock(&ts->serdes.lock);
 	siw_serdes_reset_dwork_start(chip->ts);
 
-        return;
+        return 0;
 }
 
-static ssize_t _set_serdes_setting(struct device *dev, const char *buf, size_t count)
+static ssize_t set_serdes_setting(struct device *dev, const char *buf, size_t count)
 {
         struct siw_touch_chip *chip = to_touch_chip(dev);
         struct siw_ts *ts = chip->ts;
         struct i2c_client *client = to_i2c_client(dev);
-        u8 ser_bitrate = 0;
-	u8 des_bitrate = 0;
+        int ser_bitrate = 0;
+	int des_bitrate = 0;
 
 	siw_serdes_reset_dwork_stop(chip->ts);
 	mutex_lock(&ts->serdes.lock);
-	siw_touch_irq_control(dev, INTERRUPT_DISABLE);
+	mutex_lock(&ts->lock);
 
         ser_bitrate = ser_i2c_bitrate_check(client);
 	des_bitrate = des_i2c_bitrate_check(client);
 
 	printk("Ser_Bitrate : 0x%x Des_Bitrate : 0x%x\n",ser_bitrate,des_bitrate);
 
-        serdes_i2c_reset(ts, false);
+        serdes_i2c_reset(client, false);
 
-	siw_touch_irq_control(dev, INTERRUPT_ENABLE);
+	mutex_unlock(&ts->lock);
         mutex_unlock(&ts->serdes.lock);
 	siw_serdes_reset_dwork_start(chip->ts);
 
-        return count;
+	if(count < INT_MAX)
+                return count;
+        else
+                return INT_MAX;
 }
 
-static ssize_t _set_des_setting(struct device *dev, const char *buf, size_t count)
+static ssize_t set_des_setting(struct device *dev, const char *buf, size_t count)
 {
 	struct siw_touch_chip *chip = to_touch_chip(dev);
         struct siw_ts *ts = chip->ts;
         struct i2c_client *client = to_i2c_client(dev);
-        u8 ser_bitrate = 0;
-        u8 des_bitrate = 0;
+        int ser_bitrate = 0;
+        int des_bitrate = 0;
 
 	siw_serdes_reset_dwork_stop(chip->ts);
 	mutex_lock(&ts->serdes.lock);
-	siw_touch_irq_control(dev, INTERRUPT_DISABLE);
+	mutex_lock(&ts->lock);
 
         ser_bitrate = ser_i2c_bitrate_check(client);
         des_bitrate = des_i2c_bitrate_check(client);
 
         printk("Ser_Bitrate : 0x%x Des_Bitrate : 0x%x\n",ser_bitrate,des_bitrate);
 
-	serdes_i2c_reset(ts,true);
+	serdes_i2c_reset(client,true);
 
-	siw_touch_irq_control(dev, INTERRUPT_ENABLE);
+	mutex_unlock(&ts->lock);
         mutex_unlock(&ts->serdes.lock);
 	siw_serdes_reset_dwork_start(chip->ts);
 
-        return count;
+	if(count < INT_MAX)
+                return count;
+        else
+                return INT_MAX;
 }
 
-static ssize_t _set_serdes_6gbps(struct device *dev, const char *buf, size_t count)
+static ssize_t set_serdes_6gbps(struct device *dev, const char *buf, size_t count)
 {
         struct siw_touch_chip *chip = to_touch_chip(dev);
         struct siw_ts *ts = chip->ts;
         struct i2c_client *client = to_i2c_client(dev);
-        u8 ser_bitrate = 0;
-        u8 des_bitrate = 0;
+        int ser_bitrate = 0;
+        int des_bitrate = 0;
 
 	siw_serdes_reset_dwork_stop(chip->ts);
 	mutex_lock(&ts->serdes.lock);
-	siw_touch_irq_control(dev, INTERRUPT_DISABLE);
+	mutex_lock(&ts->lock);
 
         ser_bitrate = ser_i2c_bitrate_check(client);
         des_bitrate = des_i2c_bitrate_check(client);
@@ -1170,24 +1252,27 @@ static ssize_t _set_serdes_6gbps(struct device *dev, const char *buf, size_t cou
 
         printk("Now Ser_Bitrate : 0x%x Des_Bitrate : 0x%x\n",ser_bitrate,des_bitrate);
 
-	siw_touch_irq_control(dev, INTERRUPT_ENABLE);
+	mutex_unlock(&ts->lock);
         mutex_unlock(&ts->serdes.lock);
 	siw_serdes_reset_dwork_start(chip->ts);
 
-        return count;
+	if(count < INT_MAX)
+                return count;
+        else
+                return INT_MAX;
 }
 
-static ssize_t _set_serdes_3gbps(struct device *dev, const char *buf, size_t count)
+static ssize_t set_serdes_3gbps(struct device *dev, const char *buf, size_t count)
 {
         struct siw_touch_chip *chip = to_touch_chip(dev);
         struct siw_ts *ts = chip->ts;
         struct i2c_client *client = to_i2c_client(dev);
-        u8 ser_bitrate = 0;
-        u8 des_bitrate = 0;
+        int ser_bitrate = 0;
+        int des_bitrate = 0;
 
 	siw_serdes_reset_dwork_stop(chip->ts);
 	mutex_lock(&ts->serdes.lock);
-	siw_touch_irq_control(dev, INTERRUPT_DISABLE);
+	mutex_lock(&ts->lock);
 
         ser_bitrate = ser_i2c_bitrate_check(client);
         des_bitrate = des_i2c_bitrate_check(client);
@@ -1202,14 +1287,17 @@ static ssize_t _set_serdes_3gbps(struct device *dev, const char *buf, size_t cou
 
         printk("Now Ser_Bitrate : 0x%x Des_Bitrate : 0x%x\n",ser_bitrate,des_bitrate);
 
-	siw_touch_irq_control(dev, INTERRUPT_ENABLE);
+	mutex_unlock(&ts->lock);
         mutex_unlock(&ts->serdes.lock);
 	siw_serdes_reset_dwork_start(chip->ts);
 
-        return count;
+	if(count < INT_MAX)
+                return count;
+        else
+                return INT_MAX;
 }
 
-static ssize_t _show_read_register(struct device *dev, const char *buf)
+static ssize_t show_read_register(struct device *dev, const char *buf)
 {
 	int ret, i;
         struct siw_touch_chip *chip = to_touch_chip(dev);
@@ -1221,11 +1309,13 @@ static ssize_t _show_read_register(struct device *dev, const char *buf)
 
 	siw_serdes_reset_dwork_stop(chip->ts);
 	mutex_lock(&ts->serdes.lock);
-	siw_touch_irq_control(dev, INTERRUPT_DISABLE);
+	mutex_lock(&ts->lock);
 
         addr = client->addr;
 
         printk("-----------%s\n", __func__);
+
+	serdes_video_signal_check(client, 0);
 
 	client->addr = serdes_line_fault_config[0][0];
         buf1[0] = (serdes_line_fault_config[0][1] >> 8) & 0xff;
@@ -1236,7 +1326,7 @@ static ssize_t _show_read_register(struct device *dev, const char *buf)
 
         mdelay(20);
 
-        for(i = 0; i < 9 ;i++) {
+        for(i = 0; i < 6 ;i++) {
 
                 client->addr = serdes_read[i][0];
                 buf1[0] = (serdes_read[i][1] >> 8) & 0xff;
@@ -1244,7 +1334,7 @@ static ssize_t _show_read_register(struct device *dev, const char *buf)
                 buf1[2] = serdes_read[i][2];
 
 		ret = i2c_master_send(client, buf1, 2);
-                ret = i2c_master_recv(client, buf2, 3);
+                ret = i2c_master_recv(client, buf2, 1);
 
 		printk("0x%04X 0x%04X write:0x%02X read:0x%02X\n", serdes_read[i][0], serdes_read[i][1], serdes_read[i][2], buf2[0]);
         }
@@ -1263,22 +1353,22 @@ static ssize_t _show_read_register(struct device *dev, const char *buf)
         buf1[1] = serdes_line_fault_config[2][1] & 0xff;
 
         ret = i2c_master_send(client, buf1, 2);
-        ret = i2c_master_recv(client, buf2, 3);
+        ret = i2c_master_recv(client, buf2, 1);
 
-        printk("%s err 0x%x\n",__func__, buf2[0]);
+        printk("%s err 0x%02x\n",__func__, buf2[0]);
 
 	printk("-----------%s Success\n", __func__);
 
 	client->addr = addr;
 
-	siw_touch_irq_control(dev, INTERRUPT_ENABLE);
+	mutex_unlock(&ts->lock);
         mutex_unlock(&ts->serdes.lock);
 	siw_serdes_reset_dwork_start(chip->ts);
 
-        return;
+        return 0;
 }
 
-static ssize_t _set_adm(struct device *dev, const char *buf, size_t count)
+static ssize_t set_adm(struct device *dev, const char *buf, size_t count)
 {
 	int state;
         struct siw_touch_chip *chip = to_touch_chip(dev);
@@ -1287,7 +1377,9 @@ static ssize_t _set_adm(struct device *dev, const char *buf, size_t count)
         unsigned short addr;
         struct i2c_client *client = to_i2c_client(dev);
 
-	sscanf(buf, "%d", &state);
+	if(sscanf(buf, "%d", &state) < 0)
+		return -EINVAL;
+
 	printk("%s state %d\n",__func__, state);
         if (state == 1) {
 		printk("%s Set ADM Mode\n",__func__);
@@ -1305,15 +1397,27 @@ static ssize_t _set_adm(struct device *dev, const char *buf, size_t count)
 	        buf1[2] = 0xC7;
 
 	        i2c_master_send(client, buf1, 3);
+
+		printk("%s Set Mute off Mode\n",__func__);
+
+		buf1[0] = 0x02;
+		buf1[1] = 0x21;
+		buf1[2] = 0x80;
+
+		i2c_master_send(client, buf1, 3);
+
 	        client->addr = addr;
 	}
 	else{
 		return -EINVAL;
 	}
-        return count;
+	if(count < INT_MAX)
+                return count;
+        else
+                return INT_MAX;
 }
 
-static ssize_t _set_test(struct device *dev, const char *buf, size_t count)
+static ssize_t set_test(struct device *dev, const char *buf, size_t count)
 {
         int state;
         struct siw_touch_chip *chip = to_touch_chip(dev);
@@ -1321,23 +1425,58 @@ static ssize_t _set_test(struct device *dev, const char *buf, size_t count)
         u8 buf1[3];
         unsigned short addr;
         struct i2c_client *client = to_i2c_client(dev);
+	int i;
 
-        sscanf(buf, "%d", &state);
+        if(sscanf(buf, "%d", &state) < 0)
+		return -EINVAL;
+
         printk("%s state %d\n",__func__, state);
 
-	if(state == 11)
-                des_i2c_bitrate_3gbps_to_6gbps(client);
-        else if(state == 21)
-                des_i2c_bitrate_reset(client);
-        else if(state == 19)
-                ser_i2c_bitrate_reset(client);
+	siw_serdes_reset_dwork_stop(chip->ts);
+        mutex_lock(&ts->serdes.lock);
 
-        serdes_line_fault_check_test(client,state);
+	siw_serdes_line_fault_check(client);
 
-        return count;
+	if(state == 1)
+	{
+		printk("interrupt off\n");
+		siw_touch_irq_control(dev, INTERRUPT_DISABLE);
+	}
+	else if(state >= 2)
+	{
+		printk("mutex lock\n");
+		mutex_lock(&ts->lock);
+	}
+
+	for(i=0;i < (10-state);i++)
+	{
+		printk("mdelay(5)\n");
+		mdelay(5);
+	}
+
+
+	if(state == 1)
+	{
+		printk("interrupt on\n");
+		siw_touch_irq_control(dev, INTERRUPT_ENABLE);
+	}
+	else if(state >= 2)
+	{
+		siw_serdes_i2c_connect(client);
+		printk("mutex unlock\n");
+		mutex_unlock(&ts->lock);
+	}
+
+        mutex_unlock(&ts->serdes.lock);
+        siw_serdes_reset_dwork_start(chip->ts);
+
+	if(count < INT_MAX)
+                return count;
+        else
+                return INT_MAX;
 }
 
-static ssize_t _show_mute_on(struct device *dev, const char *buf)
+static ssize_t show_mute_on(struct device *dev, const char *buf)
 {
         struct siw_touch_chip *chip = to_touch_chip(dev);
         struct siw_ts *ts = chip->ts;
@@ -1356,10 +1495,10 @@ static ssize_t _show_mute_on(struct device *dev, const char *buf)
 
         printk("%s [Done]\n",__func__);
 
-        return;
+        return 0;
 }
 
-static ssize_t _show_mute_off(struct device *dev, const char *buf)
+static ssize_t show_mute_off(struct device *dev, const char *buf)
 {
         struct siw_touch_chip *chip = to_touch_chip(dev);
         struct siw_ts *ts = chip->ts;
@@ -1378,10 +1517,10 @@ static ssize_t _show_mute_off(struct device *dev, const char *buf)
 
         printk("%s [Done]\n",__func__);
 
-        return;
+        return 0;
 }
 
-static ssize_t _set_int_on(struct device *dev, char *buf)
+static ssize_t set_int_on(struct device *dev, char *buf)
 {
         int ret;
 	struct siw_touch_chip *chip = to_touch_chip(dev);
@@ -1391,9 +1530,11 @@ static ssize_t _set_int_on(struct device *dev, char *buf)
         printk("%s [Start]\n",__func__);
 
 	siw_touch_irq_control(dev, INTERRUPT_ENABLE);
+
+	return 0;
 }
 
-static ssize_t _set_int_off(struct device *dev, char *buf)
+static ssize_t set_int_off(struct device *dev, char *buf)
 {
         int ret;
 	struct siw_touch_chip *chip = to_touch_chip(dev);
@@ -1403,9 +1544,11 @@ static ssize_t _set_int_off(struct device *dev, char *buf)
         printk("%s [Start]\n",__func__);
 
 	siw_touch_irq_control(dev, INTERRUPT_DISABLE);
+
+	return 0;
 }
 
-static ssize_t _set_lvds_con(struct device *dev, const char *buf, size_t count)
+static ssize_t set_lvds_con(struct device *dev, const char *buf, size_t count)
 {
         int state;
 	struct siw_touch_chip *chip = to_touch_chip(dev);
@@ -1414,13 +1557,14 @@ static ssize_t _set_lvds_con(struct device *dev, const char *buf, size_t count)
         u8 buf1[3];
         unsigned short addr;
 
-        sscanf(buf, "%d", &state);
+        if(sscanf(buf, "%d", &state) < 0)
+		return -EINVAL;
 
         printk("%s Start %d\n",__func__,state);
 
 	siw_serdes_reset_dwork_stop(chip->ts);
 	mutex_lock(&ts->serdes.lock);
-	siw_touch_irq_control(dev, INTERRUPT_DISABLE);
+	mutex_lock(&ts->lock);
 
 	if(state)
 	{
@@ -1447,14 +1591,17 @@ static ssize_t _set_lvds_con(struct device *dev, const char *buf, size_t count)
                 client->addr = addr;
 	}
 
-	siw_touch_irq_control(dev, INTERRUPT_ENABLE);
+	mutex_unlock(&ts->lock);
         mutex_unlock(&ts->serdes.lock);
 	siw_serdes_reset_dwork_start(chip->ts);
 
-	return count;
+	if(count < INT_MAX)
+                return count;
+        else
+                return INT_MAX;
 }
 
-static ssize_t _show_blu_reg(struct device *dev, char *buf)
+static ssize_t show_blu_reg(struct device *dev, char *buf)
 {
 	struct i2c_client *client = to_i2c_client(dev);
 	struct siw_touch_chip *chip = to_touch_chip(dev);
@@ -1467,7 +1614,7 @@ static ssize_t _show_blu_reg(struct device *dev, char *buf)
 
 	siw_serdes_reset_dwork_stop(chip->ts);
 	mutex_lock(&ts->serdes.lock);
-	siw_touch_irq_control(dev, INTERRUPT_DISABLE);
+	mutex_lock(&ts->lock);
 
 	addr = client->addr;
 
@@ -1476,27 +1623,27 @@ static ssize_t _show_blu_reg(struct device *dev, char *buf)
 	buf1[1] = 0x06;
 
 	i2c_master_send(client, buf1, 2);
-        i2c_master_recv(client, buf2, 3);
+        i2c_master_recv(client, buf2, 1);
 
-	printk("SER 0x0206 : 0x%x\n",buf2[0]);
+	printk("SER 0x0206 : 0x%02x\n",buf2[0]);
 
 	client->addr = 0x48;
         buf1[0] = 0x02;
         buf1[1] = 0x12;
 
         i2c_master_send(client, buf1, 2);
-        i2c_master_recv(client, buf2, 3);
+        i2c_master_recv(client, buf2, 1);
 
-        printk("DES 0x0212 : 0x%x\n",buf2[0]);
+        printk("DES 0x0212 : 0x%02x\n",buf2[0]);
 
 	client->addr = 0x40;
         buf1[0] = 0x02;
         buf1[1] = 0x15;
 
         i2c_master_send(client, buf1, 2);
-        i2c_master_recv(client, buf2, 3);
+        i2c_master_recv(client, buf2, 1);
 
-        printk("SER 0x0215 : 0x%x\n",buf2[0]);
+        printk("SER 0x0215 : 0x%02x\n",buf2[0]);
 	if((buf2[0]&0x08)==0x08)
 		printk("Micom BLU HIGH\n");
 	else
@@ -1507,9 +1654,9 @@ static ssize_t _show_blu_reg(struct device *dev, char *buf)
         buf1[1] = 0x15;
 
         i2c_master_send(client, buf1, 2);
-        i2c_master_recv(client, buf2, 3);
+        i2c_master_recv(client, buf2, 1);
 
-        printk("DES 0x0215 : 0x%x\n",buf2[0]);
+        printk("DES 0x0215 : 0x%02x\n",buf2[0]);
 
 	if((buf2[0]&0x06)==0x04)
 		printk("DES BLU Default");
@@ -1525,12 +1672,14 @@ static ssize_t _show_blu_reg(struct device *dev, char *buf)
 
 	client->addr = addr;
 
-	siw_touch_irq_control(dev, INTERRUPT_ENABLE);
+	mutex_unlock(&ts->lock);
         mutex_unlock(&ts->serdes.lock);
 	siw_serdes_reset_dwork_start(chip->ts);
+
+	return 0;
 }
 
-static ssize_t _set_blu_con(struct device *dev,  const char *buf, size_t count)
+static ssize_t set_blu_con(struct device *dev,  const char *buf, size_t count)
 {
         int state;
         struct i2c_client *client = to_i2c_client(dev);
@@ -1539,13 +1688,14 @@ static ssize_t _set_blu_con(struct device *dev,  const char *buf, size_t count)
         u8 buf1[3];
         unsigned short addr;
 
-        sscanf(buf, "%d", &state);
+        if(sscanf(buf, "%d", &state) < 0)
+		return -EINVAL;
 
         printk("%s Start %d\n",__func__,state);
 
 	siw_serdes_reset_dwork_stop(chip->ts);
 	mutex_lock(&ts->serdes.lock);
-	siw_touch_irq_control(dev, INTERRUPT_DISABLE);
+	mutex_lock(&ts->lock);
 
         if(state == 1) //default to micom
         {
@@ -1594,14 +1744,17 @@ static ssize_t _set_blu_con(struct device *dev,  const char *buf, size_t count)
                 client->addr = addr;
         }
 
-	siw_touch_irq_control(dev, INTERRUPT_ENABLE);
+	mutex_unlock(&ts->lock);
         mutex_unlock(&ts->serdes.lock);
 	siw_serdes_reset_dwork_start(chip->ts);
 
-	return count;
+	if(count < INT_MAX)
+                return count;
+        else
+                return INT_MAX;
 }
 
-static ssize_t _set_touch_log(struct device *dev, char *buf)
+static ssize_t set_touch_log(struct device *dev, char *buf)
 {
         int ret;
         struct i2c_client *client = to_i2c_client(dev);
@@ -1618,13 +1771,18 @@ static ssize_t _set_touch_log(struct device *dev, char *buf)
 
 	siw_serdes_reset_dwork_stop(chip->ts);
 	mutex_lock(&ts->serdes.lock);
-	siw_touch_irq_control(dev, INTERRUPT_DISABLE);
 
 	siw_touch_get(dev, CMD_ATCMD_VERSION, buf);
 	printk("F/W Version : %s\n", buf);
 
+	mobis_touch_counter_print();
+
+	mutex_lock(&ts->lock);
+
 	if(!get_montype())
 	{
+		mobis_show_need_log_count();
+
 		ser_bitrate = ser_i2c_bitrate_check(client);
 	        des_bitrate = des_i2c_bitrate_check(client);
 
@@ -1655,9 +1813,9 @@ static ssize_t _set_touch_log(struct device *dev, char *buf)
 	        buf1[1] = 0x15;
 
 	        i2c_master_send(client, buf1, 2);
-	        i2c_master_recv(client, buf2, 3);
+	        i2c_master_recv(client, buf2, 1);
 
-	        printk("SER 0x0215 read:0x%x\n",buf2[0]);
+	        printk("SER 0x0215 read:0x%02x\n",buf2[0]);
 	        if((buf2[0]&0x08)==0x08)
 	                printk("Micom BLU HIGH\n");
 	        else
@@ -1668,9 +1826,9 @@ static ssize_t _set_touch_log(struct device *dev, char *buf)
 	        buf1[1] = 0x15;
 
 	        i2c_master_send(client, buf1, 2);
-	        i2c_master_recv(client, buf2, 3);
+	        i2c_master_recv(client, buf2, 1);
 
-	        printk("DES 0x0215 read:0x%x\n",buf2[0]);
+	        printk("DES 0x0215 read:0x%02x\n",buf2[0]);
 
 	        if((buf2[0]&0x06)==0x04)
 	                printk("DES BLU Default");
@@ -1688,9 +1846,12 @@ static ssize_t _set_touch_log(struct device *dev, char *buf)
 
 		printk("\n\n");
 
+		serdes_video_signal_check(client, 0);
+
+		printk("\n");
 
 		addr = client->addr;
-		for(i = 0; i < 9 ;i++) {
+		for(i = 0; i < 6 ;i++) {
 			client->addr = serdes_read[i][0];
 			buf1[0] = (serdes_read[i][1] >> 8) & 0xff;
 			buf1[1] = serdes_read[i][1] & 0xff;
@@ -1699,7 +1860,7 @@ static ssize_t _set_touch_log(struct device *dev, char *buf)
 			if(client->addr != DES_DELAY)
 			{
 				i2c_master_send(client, buf1, 2);
-				i2c_master_recv(client, buf2, 3);
+				i2c_master_recv(client, buf2, 1);
 			}
 
 			if(client->addr == SER_ADDRESS)
@@ -1712,21 +1873,25 @@ static ssize_t _set_touch_log(struct device *dev, char *buf)
 
 		printk("\n");
 
-		serdes_i2c_show(ts);
+		serdes_i2c_show(client);
 
                 printk("\n");
 	}
 
 	siw_touch_cnt = 5;
 
+	mobis_touch_counter_reset();
+
 	printk("----------------------------------------------------\n");
 
-	siw_touch_irq_control(dev, INTERRUPT_ENABLE);
+	mutex_unlock(&ts->lock);
         mutex_unlock(&ts->serdes.lock);
 	siw_serdes_reset_dwork_start(chip->ts);
+
+	return 0;
 }
 
-static ssize_t _set_touch_test(struct device *dev, const char *buf, size_t count)
+static ssize_t set_touch_test(struct device *dev, const char *buf, size_t count)
 {
         int state;
         struct siw_touch_chip *chip = to_touch_chip(dev);
@@ -1759,16 +1924,119 @@ static ssize_t _set_touch_test(struct device *dev, const char *buf, size_t count
 
         input_sync(input);
 
-        return count;
+	if(count < INT_MAX)
+                return count;
+        else
+                return INT_MAX;
 }
 
 ssize_t siw_set_adm(struct device *dev, const char *buf, size_t count)
 {
-        return _set_adm(dev, buf, count);
+        return set_adm(dev, buf, count);
 }
 EXPORT_SYMBOL(siw_set_adm);
 
-#endif	/* __SIW_SUPPORT_ALIVE_DETECTION */
+static ssize_t set_des_bitrate_change(struct device *dev, const char *buf)
+{
+	struct siw_touch_chip *chip = to_touch_chip(dev);
+        struct siw_ts *ts = chip->ts;
+        struct i2c_client *client = to_i2c_client(dev);
+
+	printk("%s [Start]\n",__func__);
+
+	siw_serdes_reset_dwork_stop(chip->ts);
+        mutex_lock(&ts->serdes.lock);
+        mutex_lock(&ts->lock);
+
+	des_i2c_bitrate_3gbps_to_6gbps(client);
+
+	mutex_unlock(&ts->lock);
+        mutex_unlock(&ts->serdes.lock);
+        siw_serdes_reset_dwork_start(chip->ts);
+
+        return 0;
+}	
+
+static ssize_t show_serdes_log(struct device *dev, const char *buf)
+{
+        struct siw_touch_chip *chip = to_touch_chip(dev);
+        struct siw_ts *ts = chip->ts;
+        struct i2c_client *client = to_i2c_client(dev);
+
+	unsigned short addr;
+	u8 data[255];
+
+        int i;
+        int ret;
+
+        char serdes_log[10];
+        char buffer[4];
+        int sizeofbuffer, sizeofserdes_log;
+        int lock_pin, line_fault;
+        memset(serdes_log, 0x00, sizeof(serdes_log));
+
+	if(get_montype())
+        {
+                printk("%s This function support only departed lcd model which is include Serdes chip\n",__func__);
+                return 0;
+        }
+
+        printk("%s [Start]\n",__func__);
+
+        siw_serdes_reset_dwork_stop(chip->ts);
+        mutex_lock(&ts->serdes.lock);
+	mutex_lock(&ts->lock);
+
+	serdes_log[0] = 0x62;
+        serdes_log[1] = 0xF1;
+        serdes_log[2] = 0x20;
+
+        lock_pin = siw_serdes_i2c_connect(client);
+        serdes_video_signal_check(client, lock_pin);
+        line_fault = siw_serdes_line_fault_check(client);
+
+        if(siw_serdes_check_value[1] != 0xE1)
+                serdes_log[3] = 0x01;
+
+        if((line_fault == 0x2E) && ((lock_pin&0xfa)!=0xda))
+                serdes_log[4] = 0x01;
+
+        if((lock_pin&0xfa)!=0xda)
+        {
+                serdes_log[5] = 0x01;
+        }
+        else if((siw_serdes_check_value[0] >= 0x20) || (siw_serdes_check_value[4] >= 0x20))
+        {
+                serdes_log[5] = 0x01;
+        }
+
+        mobis_serdes_status_count_read(buffer);
+
+	sizeofbuffer = sizeof(buffer) / sizeof(char);
+        sizeofserdes_log = sizeof(serdes_log) / sizeof(char);
+
+        for(i = 0;i < sizeofbuffer ;i++)
+                serdes_log[sizeofserdes_log - sizeofbuffer + i] = buffer[i];
+
+        for(i = 0; i < sizeofserdes_log ; i++)
+        {
+                printk("Serdes Byte[%d] : %02X\n",i+1,serdes_log[i]);
+        }
+
+        snprintf(data, sizeof(data), "%02X%02X%02X%02X%02X%02X%02X\n", serdes_log[3], serdes_log[4], serdes_log[5], serdes_log[6], serdes_log[7], serdes_log[8], serdes_log[9]);
+
+        ret = snprintf(buf, 255, "%s\n", data);
+
+	mobis_serdes_status_count_reset();
+
+	mutex_unlock(&ts->lock);
+        mutex_unlock(&ts->serdes.lock);
+        siw_serdes_reset_dwork_start(chip->ts);
+
+	return ret;
+}
+
+#endif	/* SIW_SUPPORT_ALIVE_DETECTION */
 
 
 #define SIW_TOUCH_HAL_ATTR(_name, _show, _store)	\
@@ -1777,8 +2045,8 @@ EXPORT_SYMBOL(siw_set_adm);
 #define _SIW_TOUCH_HAL_ATTR_T(_name)	\
 		touch_attr_##_name
 
-static SIW_TOUCH_HAL_ATTR(reg_list, _show_reg_list, NULL);
-static SIW_TOUCH_HAL_ATTR(reg_ctrl, _show_reg_ctrl, _store_reg_ctrl);
+static SIW_TOUCH_HAL_ATTR(reg_list, show_reg_list, NULL);
+static SIW_TOUCH_HAL_ATTR(reg_ctrl, show_reg_ctrl, store_reg_ctrl);
 #if defined(__SIW_CONFIG_KNOCK)
 static SIW_TOUCH_HAL_ATTR(tci_debug, _show_tci_debug, _store_tci_debug);
 static SIW_TOUCH_HAL_ATTR(lcd_mode, _show_lcd_mode, _store_lcd_mode);
@@ -1786,40 +2054,42 @@ static SIW_TOUCH_HAL_ATTR(lcd_mode, _show_lcd_mode, _store_lcd_mode);
 #if defined(__SIW_CONFIG_SWIPE)
 static SIW_TOUCH_HAL_ATTR(swipe_debug, _show_swipe_debug, _store_swipe_debug);
 #endif
-static SIW_TOUCH_HAL_ATTR(reset_ctrl, _show_reset_ctrl, _store_reset_ctrl);
-#if defined(__SIW_ATTR_RST_BY_READ)
-static SIW_TOUCH_HAL_ATTR(reset_sw, _show_reset_sw, NULL);
-static SIW_TOUCH_HAL_ATTR(reset_hw, _show_reset_hw, NULL);
+static SIW_TOUCH_HAL_ATTR(reset_ctrl, show_reset_ctrl, store_reset_ctrl);
+#if defined(SIW_ATTR_RST_BY_READ)
+static SIW_TOUCH_HAL_ATTR(reset_sw, show_reset_sw, NULL);
+static SIW_TOUCH_HAL_ATTR(reset_hw, show_reset_hw, NULL);
 #endif
 #if defined(__SIW_USE_BUS_TEST)
 static SIW_TOUCH_HAL_ATTR(debug_bus, _show_debug_bus, NULL);
 #endif
-static SIW_TOUCH_HAL_ATTR(debug_hal, _show_debug_hal, _store_debug_hal);
-#if defined(__SIW_SUPPORT_ALIVE_DETECTION)
-static SIW_TOUCH_HAL_ATTR(alive_debug, _show_alive_debug, _store_alive_debug);
-static SIW_TOUCH_HAL_ATTR(alive_count, _show_alive_count, _store_alive_count);
-static SIW_TOUCH_HAL_ATTR(alive_level, _show_alive_level, _store_alive_level);
+static SIW_TOUCH_HAL_ATTR(debug_hal, show_debug_hal, store_debug_hal);
+#if defined(SIW_SUPPORT_ALIVE_DETECTION)
+static SIW_TOUCH_HAL_ATTR(alive_debug, show_alive_debug, store_alive_debug);
+static SIW_TOUCH_HAL_ATTR(alive_count, show_alive_count, store_alive_count);
+static SIW_TOUCH_HAL_ATTR(alive_level, show_alive_level, store_alive_level);
 #endif
-static SIW_TOUCH_HAL_ATTR(8_debug, _show_debug, _set_debug);
-static SIW_TOUCH_HAL_ATTR(power_off, _show_power_off, NULL);
-static SIW_TOUCH_HAL_ATTR(power_on, _show_power_on, NULL);
-static SIW_TOUCH_HAL_ATTR(serdes_setting, _show_serdes_setting, _set_serdes_setting);
-static SIW_TOUCH_HAL_ATTR(des_setting, NULL, _set_des_setting);
-static SIW_TOUCH_HAL_ATTR(recovery_off, _show_recovery_off, NULL);
-static SIW_TOUCH_HAL_ATTR(recovery_on, _show_recovery_on, NULL);
-static SIW_TOUCH_HAL_ATTR(read_register, _show_read_register, NULL);
-static SIW_TOUCH_HAL_ATTR(adm, NULL, _set_adm);
-static SIW_TOUCH_HAL_ATTR(test, NULL, _set_test);
-static SIW_TOUCH_HAL_ATTR(mute_on, _show_mute_on, NULL);
-static SIW_TOUCH_HAL_ATTR(mute_off, _show_mute_off, NULL);
-static SIW_TOUCH_HAL_ATTR(int_on, _set_int_on, NULL);
-static SIW_TOUCH_HAL_ATTR(int_off, _set_int_off, NULL);
-static SIW_TOUCH_HAL_ATTR(set_serdes_6gbps, NULL, _set_serdes_6gbps);
-static SIW_TOUCH_HAL_ATTR(set_serdes_3gbps, NULL, _set_serdes_3gbps);
-static SIW_TOUCH_HAL_ATTR(touch_test, NULL, _set_touch_test);
-static SIW_TOUCH_HAL_ATTR(lvds_con, NULL, _set_lvds_con);
-static SIW_TOUCH_HAL_ATTR(blu_con, _show_blu_reg, _set_blu_con);
-static SIW_TOUCH_HAL_ATTR(touch_log, _set_touch_log, NULL);
+static SIW_TOUCH_HAL_ATTR(8_debug, show_debug, set_debug);
+static SIW_TOUCH_HAL_ATTR(power_off, show_power_off, NULL);
+static SIW_TOUCH_HAL_ATTR(power_on, show_power_on, NULL);
+static SIW_TOUCH_HAL_ATTR(serdes_setting, show_serdes_setting, set_serdes_setting);
+static SIW_TOUCH_HAL_ATTR(des_setting, NULL, set_des_setting);
+static SIW_TOUCH_HAL_ATTR(recovery_off, show_recovery_off, NULL);
+static SIW_TOUCH_HAL_ATTR(recovery_on, show_recovery_on, NULL);
+static SIW_TOUCH_HAL_ATTR(read_register, show_read_register, NULL);
+static SIW_TOUCH_HAL_ATTR(adm, NULL, set_adm);
+static SIW_TOUCH_HAL_ATTR(test, NULL, set_test);
+static SIW_TOUCH_HAL_ATTR(mute_on, show_mute_on, NULL);
+static SIW_TOUCH_HAL_ATTR(mute_off, show_mute_off, NULL);
+static SIW_TOUCH_HAL_ATTR(int_on, set_int_on, NULL);
+static SIW_TOUCH_HAL_ATTR(int_off, set_int_off, NULL);
+static SIW_TOUCH_HAL_ATTR(set_serdes_6gbps, NULL, set_serdes_6gbps);
+static SIW_TOUCH_HAL_ATTR(set_serdes_3gbps, NULL, set_serdes_3gbps);
+static SIW_TOUCH_HAL_ATTR(linklock_disconnect, set_des_bitrate_change, NULL);
+static SIW_TOUCH_HAL_ATTR(touch_test, NULL, set_touch_test);
+static SIW_TOUCH_HAL_ATTR(lvds_con, NULL, set_lvds_con);
+static SIW_TOUCH_HAL_ATTR(blu_con, show_blu_reg, set_blu_con);
+static SIW_TOUCH_HAL_ATTR(touch_log, set_touch_log, NULL);
+static SIW_TOUCH_HAL_ATTR(serdes_log, show_serdes_log, NULL);
 
 static struct attribute *siw_hal_attribute_list[] = {
 	&_SIW_TOUCH_HAL_ATTR_T(reg_list).attr,
@@ -1832,7 +2102,7 @@ static struct attribute *siw_hal_attribute_list[] = {
 	&_SIW_TOUCH_HAL_ATTR_T(swipe_debug).attr,
 #endif
 	&_SIW_TOUCH_HAL_ATTR_T(reset_ctrl).attr,
-#if defined(__SIW_ATTR_RST_BY_READ)
+#if defined(SIW_ATTR_RST_BY_READ)
 	&_SIW_TOUCH_HAL_ATTR_T(reset_sw).attr,
 	&_SIW_TOUCH_HAL_ATTR_T(reset_hw).attr,
 #endif
@@ -1840,7 +2110,7 @@ static struct attribute *siw_hal_attribute_list[] = {
 	&_SIW_TOUCH_HAL_ATTR_T(debug_bus).attr,
 #endif
 	&_SIW_TOUCH_HAL_ATTR_T(debug_hal).attr,
-#if defined(__SIW_SUPPORT_ALIVE_DETECTION)
+#if defined(SIW_SUPPORT_ALIVE_DETECTION)
 	&_SIW_TOUCH_HAL_ATTR_T(alive_debug).attr,
 	&_SIW_TOUCH_HAL_ATTR_T(alive_count).attr,
 	&_SIW_TOUCH_HAL_ATTR_T(alive_level).attr,
@@ -1861,10 +2131,12 @@ static struct attribute *siw_hal_attribute_list[] = {
         &_SIW_TOUCH_HAL_ATTR_T(int_off).attr,
         &_SIW_TOUCH_HAL_ATTR_T(set_serdes_6gbps).attr,
         &_SIW_TOUCH_HAL_ATTR_T(set_serdes_3gbps).attr,
+	&_SIW_TOUCH_HAL_ATTR_T(linklock_disconnect).attr,
 	&_SIW_TOUCH_HAL_ATTR_T(touch_test).attr,
 	&_SIW_TOUCH_HAL_ATTR_T(lvds_con).attr,
 	&_SIW_TOUCH_HAL_ATTR_T(blu_con).attr,
 	&_SIW_TOUCH_HAL_ATTR_T(touch_log).attr,
+	&_SIW_TOUCH_HAL_ATTR_T(serdes_log).attr,
 	NULL,
 };
 

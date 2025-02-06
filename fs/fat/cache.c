@@ -350,7 +350,7 @@ static int fat_bmap_cluster(struct inode *inode, int cluster)
 	if (ret < 0)
 		return ret;
 	else if (ret == FAT_ENT_EOF) {
-		fat_fs_error(sb, "%s: request beyond EOF (i_pos %lld)",
+		fat_fs_error_ratelimit(sb, "%s: request beyond EOF (i_pos %lld)",
 			     __func__, MSDOS_I(inode)->i_pos);
 		return -EIO;
 	}
@@ -370,7 +370,7 @@ static int fat_bmap_cluster_nocache(struct super_block *sb, sector_t i_start,
 	if (ret < 0)
 		return ret;
 	else if (ret == FAT_ENT_EOF) {
-		fat_fs_error(sb, "%s: request beyond EOF (i_pos %lld)",
+		fat_fs_error_ratelimit(sb, "%s: request beyond EOF (i_pos %lld)",
 			     __func__, i_pos);
 		return -EIO;
 	}

@@ -601,7 +601,7 @@ static void tcc_spi_next_message(struct spi_master *master)
 			tspi->set_bit_width(tspi, bits);
 		}
 
-		#if defined(CONFIG_TDMB)
+		#if defined(INCLUDE_TDMB)
 			tspi->set_bit_width(tspi,32);
 			static bool logprint = true;
 			if(logprint)
@@ -1430,7 +1430,7 @@ static struct spi_board_info spi1_board_info[] = {
         .bus_num = 1,                   // spi channel 0
         .chip_select = 0,
         // you can modify the following member variables
-#if defined(CONFIG_TDMB)
+#if defined(INCLUDE_TDMB)
         .max_speed_hz = 10*1000*1000,    // default 10Mhz
 	.mode = SPI_MODE_1,
 #else
@@ -1446,7 +1446,7 @@ static struct spi_board_info spi2_board_info[] = {
         .bus_num = 2,                   // spi channel 0
         .chip_select = 0,
         // you can modify the following member variables
-#if defined(CONFIG_TDMB)
+#if defined(INCLUDE_TDMB)
 	 .max_speed_hz = 10*1000*1000,    // 10Mhz
 	 .mode = SPI_MODE_1,             // default 0, you can choose [SPI_CPOL|SPI_CPHA|SPI_CS_HIGH|SPI_LSB_FIRST]
 #else

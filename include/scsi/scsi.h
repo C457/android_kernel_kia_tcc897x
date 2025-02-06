@@ -32,7 +32,8 @@ enum scsi_timeouts {
  * is totally arbitrary, a setting of 2048 will get you at least 8mb ios.
  */
 #ifdef CONFIG_ARCH_HAS_SG_CHAIN
-#define SCSI_MAX_SG_CHAIN_SEGMENTS	2048
+//#define SCSI_MAX_SG_CHAIN_SEGMENTS	2048
+#define SCSI_MAX_SG_CHAIN_SEGMENTS	SCSI_MAX_SG_SEGMENTS
 #else
 #define SCSI_MAX_SG_CHAIN_SEGMENTS	SCSI_MAX_SG_SEGMENTS
 #endif

@@ -120,7 +120,7 @@ EXPORT_SYMBOL_GPL(ehci_cf_port_reset_rwsem);
 #endif
 
 #undef MAX_TOPO_LEVEL
-#if defined(CONFIG_EXHUB)
+#if defined(INCLUDE_EXHUB)
 	#define MAX_TOPO_LEVEL	2	/* # of hub topology: 0 is rh, 1 is external hub */
 #else
 	#define MAX_TOPO_LEVEL	1	/* # of hub topology: 0 is rh, 1 is external hub */
@@ -2023,7 +2023,7 @@ static int hub_probe(struct usb_interface *intf, const struct usb_device_id *id)
 	}
 #endif
 
-#if defined(CONFIG_EXHUB)
+#if defined(INCLUDE_EXHUB)
 	printk("%s::HUB_LEVEL:%d\n", __func__, MAX_TOPO_LEVEL);
 #endif
 

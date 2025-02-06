@@ -9,8 +9,8 @@
  * version 2 as published by the Free Software Foundation.
  */
 
-#ifndef __SIW_TOUCH_GPIO_H
-#define __SIW_TOUCH_GPIO_H
+#ifndef SIW_TOUCH_GPIO_H
+#define SIW_TOUCH_GPIO_H
 
 #if 1
 enum {
@@ -145,5 +145,5 @@ extern int siw_touch_power_free(struct device *dev);
 extern void siw_touch_power_vdd(struct device *dev, int value);
 extern void siw_touch_power_vio(struct device *dev, int value);
 
-#endif	/* __SIW_TOUCH_GPIO_H */
+#endif	/* SIW_TOUCH_GPIO_H */
 

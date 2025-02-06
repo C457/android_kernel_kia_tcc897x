@@ -22,6 +22,13 @@
 #include <asm/uaccess.h>
 #include <asm/unistd.h>
 
+//#define MOBIS_OPEN_READ_TRACE
+#ifdef MOBIS_OPEN_READ_TRACE
+#include "mount.h"
+#define MOBIS_FILE_PATH 256
+#define MOBIS_OPEN_READ_TRACE 1024
+#endif
+
 typedef ssize_t (*io_fn_t)(struct file *, char __user *, size_t, loff_t *);
 typedef ssize_t (*iov_fn_t)(struct kiocb *, const struct iovec *,
 		unsigned long, loff_t);
@@ -415,6 +422,12 @@ EXPORT_SYMBOL(new_sync_read);
 ssize_t vfs_read(struct file *file, char __user *buf, size_t count, loff_t *pos)
 {
 	ssize_t ret;
+#ifdef MOBIS_OPEN_READ_TRACE
+	char *p= NULL;
+	char fullpath[MOBIS_FILE_PATH] = {0, };
+	int full_path_len=0;
+	struct mount *r = NULL;
+#endif
 
 	if (!(file->f_mode & FMODE_READ))
 		return -EBADF;
@@ -423,6 +436,30 @@ ssize_t vfs_read(struct file *file, char __user *buf, size_t count, loff_t *pos)
 	if (unlikely(!access_ok(VERIFY_WRITE, buf, count)))
 		return -EFAULT;
 
+#ifdef MOBIS_OPEN_READ_TRACE
+	memset(fullpath, 0x00, MOBIS_FILE_PATH);
+	r = real_mount(file->f_path.mnt);
+	p = dentry_path_raw(file->f_path.dentry, fullpath, MOBIS_FILE_PATH);
+	full_path_len = strlen(p);
+#if 1
+	if (strstr(r->mnt_mountpoint->d_name.name , "system") != NULL && count >= MOBIS_OPEN_READ_TRACE)
+	{
+		if (full_path_len > 0 && strstr(p, "/bin/") == NULL )
+			printk("fullpath r =/%s%s,%lld,%lu\n", r->mnt_mountpoint->d_name.name, p, *pos, count);
+	}
+#else
+	if(full_path_len > 0 && count >= MOBIS_OPEN_READ_TRACE)
+	{
+		if (strstr(p, "/app/") != NULL || strstr(p, "/etc/") != NULL || strstr(p, "/fonts/") != NULL ||
+			strstr(p, "/framework/") != NULL || strstr(p, "/lib/") != NULL || strstr(p, "/media/") != NULL ||
+			strstr(p, "/priv-app/") != NULL || strstr(p, "/usr/") != NULL)
+		{
+			if(strstr(p, ".ko") == NULL)
+				printk("fullpath r =/%s%s,%lld,%u\n", r->mnt_mountpoint->d_name.name, p, *pos, count);
+		}
+	}
+#endif
+#endif
 	ret = rw_verify_area(READ, file, pos, count);
 	if (ret >= 0) {
 		count = ret;

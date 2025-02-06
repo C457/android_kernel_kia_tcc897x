@@ -413,12 +413,13 @@ struct mip4_ts_info {
 	struct cdev cdev;
 	u8 *dev_fs_buf;
 #endif
-//#if defined(INCLUDE_MAX_SER_DES)
-    struct {
+#if USE_AUTO_FW_UPDATE
+	struct delayed_work upgrade_work;
+#endif
+	struct {
 		struct delayed_work reset_dwork;
 		struct mutex lock;
-    } serdes;
-//#endif
+	} serdes;
 
 };
 
@@ -517,8 +518,22 @@ int mip4_ts_lpwg_event_handler(struct mip4_ts_info *info, u8 *rbuf, u8 size);
 
 extern int melfas_debug;
 extern int melfas_touch_cnt;
+extern int PRINT_SERDES_LOG;
 int mobis_touch_update_check(void);
 void mobis_touch_update_complete(void);
+void mobis_serdes_need_log(void);
+void mobis_show_need_log_count(void);
+void mobis_serdes_status_count_reset(void);
+void mobis_serdes_status_count_update(u8 *serdes_check_value_arr, int lock_pin, int line_fault);
+void mobis_serdes_status_count_read(char *buffer);
+void mobis_serdes_status_count_write(char *buffer);
+bool mobis_touch_counter_flag_check(int id);
+void mobis_touch_counter_press(char *buf, int id);
+void mobis_touch_counter_release(char *buf, int id);
+void mobis_touch_counter_print(void);
+void mobis_touch_counter_reset(void);
+u8 mobis_idtc_check_read(void);
+void mobis_idtc_check_write(u8 *serdes_check_value_arr, int lock_pin, int line_fault, bool touch_watchdog, bool touch_crc_err);
 #if defined(CONFIG_WIDE_PE_COMMON)||defined(CONFIG_TOUCHSCREEN_ONEBIN)
 int mip4_init(void);
 void mip4_cleanup(void);

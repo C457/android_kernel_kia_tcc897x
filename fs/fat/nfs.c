@@ -79,7 +79,7 @@ static struct inode *__fat_nfs_get_inode(struct super_block *sb,
 		fat_get_blknr_offset(MSDOS_SB(sb), i_pos, &blocknr, &offset);
 		bh = sb_bread(sb, blocknr);
 		if (!bh) {
-			fat_msg(sb, KERN_ERR,
+			fat_msg_ratelimit(sb, KERN_ERR,
 				"unable to read block(%llu) for building NFS inode",
 				(llu)blocknr);
 			return inode;
@@ -231,7 +231,7 @@ struct inode *fat_rebuild_parent(struct super_block *sb, int parent_logstart)
 	sector_t blknr = fat_clus_to_blknr(sbi, parent_logstart);
 	struct buffer_head *parent_bh = sb_bread(sb, blknr);
 	if (!parent_bh) {
-		fat_msg(sb, KERN_ERR,
+		fat_msg_ratelimit(sb, KERN_ERR,
 			"unable to read cluster of parent directory");
 		return NULL;
 	}

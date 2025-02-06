@@ -562,7 +562,7 @@ static struct file *open_dup_ttyd(char *path, int flags)
 
 	set_fs(fs);
 	if (IS_ERR(file)) {
-		dtd_err("error: filp_open() %ld\n",PTR_ERR(file));
+		dtd_err("error: filp_open() %ld, %s\n",PTR_ERR(file) , path);
 	}
 
 	msleep(500);

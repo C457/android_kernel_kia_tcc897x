@@ -340,6 +340,181 @@ static const struct file_operations mmc_dbg_ext_csd_fops = {
 	.llseek		= default_llseek,
 };
 
+#ifdef CONFIG_DAUDIO_KK
+#define MICRON_TLC_MANIFID 0x13
+#define MAX_PRE_LOADING_DATA_LEN 8
+#define MAX_PRE_LOADING_DATA_64G "0028b706" // please refer micron datasheet 0x06b72800h
+#define MAX_PRE_LOADING_DATA_128G "00506e0d" // please refer micron datasheet 0x0d6e5000h
+static int mtlc_check_value=0;
+
+#define MMC_GEN_CMD_ARGUMENT 0x00000039
+#define MMC_GEN_CMD_STR_COMPLETE_LEN 5
+//========================================================================
+static int mmc_ext_csd_open_ex(struct inode *inode, struct file *filp)
+{
+	struct mmc_card *card = inode->i_private;
+	char *buf;
+	char bbuf[EXT_CSD_STR_LEN+1] = {0,};
+	ssize_t n = 0;
+	u8 *ext_csd;
+	int err, i;
+
+	buf = kmalloc(MAX_PRE_LOADING_DATA_LEN + 1, GFP_KERNEL);
+	if (!buf)
+		return -ENOMEM;
+
+	memset(buf, 0x00, MAX_PRE_LOADING_DATA_LEN + 1);
+
+	if (card->cid.manfid != MICRON_TLC_MANIFID)
+	{
+		strcpy(buf, "false\n");
+		mtlc_check_value=-1;
+		filp->private_data = buf;
+		return 0;
+	}
+
+	ext_csd = kmalloc(512, GFP_KERNEL);
+	if (!ext_csd) {
+		err = -ENOMEM;
+		goto out_free;
+	}
+
+	mmc_get_card(card);
+	err = mmc_send_ext_csd(card, ext_csd);
+	mmc_put_card(card);
+	if (err)
+		goto out_free;
+
+	for (i = 0; i < 512; i++)
+		n += sprintf(bbuf + n, "%02x", ext_csd[i]);
+	n += sprintf(bbuf + n, "\n");
+	BUG_ON(n != EXT_CSD_STR_LEN);
+
+	// micron datasheet MAX_PRE_LOADING_DATA_SIZE ECSD[18~21]
+	strncpy(buf, &bbuf[36], 8);
+	if((strcmp(buf, MAX_PRE_LOADING_DATA_64G) == 0) || (strcmp(buf, MAX_PRE_LOADING_DATA_128G) == 0))
+	{
+		mtlc_check_value=1;
+		memset(buf, 0x00, MAX_PRE_LOADING_DATA_LEN + 1);
+		strcpy(buf, "true\n");
+	}
+	else
+	{
+		mtlc_check_value=-1;
+		memset(buf, 0x00, MAX_PRE_LOADING_DATA_LEN + 1);
+		strcpy(buf, "false\n");
+	}
+
+	filp->private_data = buf;
+	kfree(ext_csd);
+	return 0;
+
+out_free:
+	kfree(buf);
+	kfree(ext_csd);
+	return err;
+}
+
+static ssize_t mmc_ext_csd_read_ex(struct file *filp, char __user *ubuf,
+				size_t cnt, loff_t *ppos)
+{
+	char *buf = filp->private_data;
+
+	return simple_read_from_buffer(ubuf, cnt, ppos,
+				       buf, MAX_PRE_LOADING_DATA_LEN+1);
+}
+
+static const struct file_operations mmc_dbg_fops_mtlc_check = {
+	.open		= mmc_ext_csd_open_ex,
+	.read		= mmc_ext_csd_read_ex,
+	.release	= mmc_ext_csd_release,
+	.llseek		= default_llseek,
+};
+
+//========================================================================
+static int mmc_gen_cmd_open(struct inode *inode, struct file *filp)
+{
+	struct mmc_card *card = inode->i_private;
+	int *buf;
+	u8 *gen_buffer;
+	int err;
+	int percentage=0;
+	unsigned int upercentage=0;
+
+	buf = kmalloc(MMC_GEN_CMD_STR_COMPLETE_LEN, GFP_KERNEL);
+	if (!buf)
+		return -ENOMEM;
+
+	memset(buf, 0x00, MMC_GEN_CMD_STR_COMPLETE_LEN);
+
+	gen_buffer = kmalloc(512, GFP_KERNEL);
+	if (!gen_buffer) {
+		err = -ENOMEM;
+		goto out_free;
+	}
+
+	mmc_get_card(card);
+	err = mmc_send_gen56_data(card, gen_buffer);
+	mmc_put_card(card);
+	if (err)
+		goto out;
+
+	// refer micron data sheet
+	//sprintf(&buf[0], "%d", gen_buffer[217]);	//0xD9
+	//sprintf(&buf[1], "%d", gen_buffer[216]);	//0xD8
+	// 0x2710 => 10000,  divide by 100 => 100%
+	percentage = (int)gen_buffer[217] *256;		// data * 0x100
+	percentage = percentage + (int)gen_buffer[216];
+
+	if (percentage > 10000)
+		strcpy(buf, "0%\n");
+	else if (mtlc_check_value == -1)
+		strcpy(buf, "0%\n");
+	else
+	{
+		upercentage  = percentage/100;
+		sprintf(buf, "%3d%\n", upercentage);
+	}
+	filp->private_data = buf;
+	kfree(gen_buffer);
+	return 0;
+
+out_free:
+	kfree(buf);
+	kfree(gen_buffer);
+	return err;
+
+out :
+	strcpy(buf, "0%\n");
+	filp->private_data = buf;
+	printk("eMMC gen56 command timeout error!!\n");
+	kfree(gen_buffer);
+	return 0;
+}
+
+static ssize_t mmc_gen_cmd_read(struct file *filp, char __user *ubuf,
+				size_t cnt, loff_t *ppos)
+{
+	char *buf = filp->private_data;
+	return simple_read_from_buffer(ubuf, cnt, ppos, buf, MMC_GEN_CMD_STR_COMPLETE_LEN);
+}
+
+static int mmc_gen_cmd_relase(struct inode *inode, struct file *file)
+{
+	kfree(file->private_data);
+	return 0;
+}
+
+
+static const struct file_operations mmc_dbg_fops_mtlc_complete = {
+	.open		= mmc_gen_cmd_open,
+	.read		= mmc_gen_cmd_read,
+	.release	= mmc_gen_cmd_relase,
+	.llseek		= default_llseek,
+};
+#endif //CONFIG_WIDE_PE_COMMON
+
+
 void mmc_add_card_debugfs(struct mmc_card *card)
 {
 	struct mmc_host	*host = card->host;
@@ -372,6 +547,16 @@ void mmc_add_card_debugfs(struct mmc_card *card)
 					&mmc_dbg_ext_csd_fops))
 			goto err;
 
+#ifdef CONFIG_DAUDIO_KK
+	if (mmc_card_mmc(card))
+		if (!debugfs_create_file("mtlc_check", S_IRUGO, root, card,
+					&mmc_dbg_fops_mtlc_check))
+			goto err;
+	if (mmc_card_mmc(card))
+		if (!debugfs_create_file("mtlc_complete", S_IRUGO, root, card,
+					&mmc_dbg_fops_mtlc_complete))
+			goto err;
+#endif
 	return;
 
 err:

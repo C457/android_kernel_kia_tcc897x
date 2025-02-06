@@ -222,24 +222,24 @@ int siw_touch_sys_osc(struct device *dev, int onoff)
 
 static int check_sys_con(struct device *dev, int *level)
 {
-	int __level;
+	int var_level;
 	int ret = 0;
 
-	ret = siw_hal_read_value(dev, LEVEL_ADDR, &__level);
+	ret = siw_hal_read_value(dev, LEVEL_ADDR, &var_level);
 	if (ret < 0) {
 		t_dev_err(dev, "failed to get level\n");
 		goto out;
 	}
 
-	if ((__level < LEVEL_MIN) || (__level > LEVEL_MAX)) {
+	if ((var_level < LEVEL_MIN) || (var_level > LEVEL_MAX)) {
 		t_dev_err(dev,
-			"The current FW doesn't support this, %d\n", __level);
+			"The current FW doesn't support this, %d\n", var_level);
 		ret = -ESRCH;
 		goto out;
 	}
 
 	if (level != NULL)
-		*level = __level;
+		*level = var_level;
 
 out:
 	return ret;
@@ -285,12 +285,18 @@ ssize_t store_do_sys_con(struct device *dev,
 
 	if (sscanf(buf, "%X", &level) <= 0) {
 		t_dev_err(dev, "Invalid param\n");
-		return count;
+		if(count < INT_MAX)
+	                return count;
+	        else
+	                return INT_MAX;
 	}
 
 	ret = check_sys_con(dev, NULL);
 	if (ret < 0) {
-		return count;
+		if(count < INT_MAX)
+	                return count;
+	        else
+	                return INT_MAX;
 	}
 
 	save = level & 0x80;
@@ -298,7 +304,10 @@ ssize_t store_do_sys_con(struct device *dev,
 	level &= 0x7F;
 	if ((level < LEVEL_MIN) || (level > LEVEL_MAX)) {
 		t_dev_err(dev, "invalid level, %d\n", level);
-		return count;
+		if(count < INT_MAX)
+	                return count;
+	        else
+	                return INT_MAX;
 	}
 
 	ret = siw_hal_write_value(dev, LEVEL_ADDR, level);
@@ -306,7 +315,10 @@ ssize_t store_do_sys_con(struct device *dev,
 		t_dev_err(dev,
 			"failed to set level(%d), %d\n",
 			level, ret);
-		return count;
+		if(count < INT_MAX)
+	                return count;
+	        else
+	                return INT_MAX;
 	}
 	t_dev_info(dev, "new level is %d\n", level);
 
@@ -324,7 +336,10 @@ ssize_t store_do_sys_con(struct device *dev,
 		if (ret < 0) {
 			t_dev_err(dev, "failed to set wr_cmd(%Xh), %d\n",
 				wr_cmd, ret);
-			return count;
+			if(count < INT_MAX)
+		                return count;
+		        else
+	        	        return INT_MAX;
 		}
 
 		do {
@@ -347,7 +362,10 @@ ssize_t store_do_sys_con(struct device *dev,
 		}
 	}
 
-	return count;
+	if(count < INT_MAX)
+                return count;
+        else
+                return INT_MAX;
 }
 
 ssize_t store_sys_con(struct device *dev,

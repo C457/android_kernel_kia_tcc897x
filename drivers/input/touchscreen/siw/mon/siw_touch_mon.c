@@ -36,9 +36,9 @@ void siw_mon_prt_del(struct siw_mon_term *mterm);
 extern int siw_mon_prt_init(void);
 extern void siw_mon_prt_exit(void);
 
-DEFINE_MUTEX(__siw_mon_lock);
+DEFINE_MUTEX(siw_mon_lock);
 
-static LIST_HEAD(__siw_mon_term_list);
+static LIST_HEAD(siw_mon_term_list);
 
 static struct siw_mon_term __siw_mon_term = { 0, };
 
@@ -307,7 +307,7 @@ static void siw_mon_stop(struct siw_mon_term *mterm)
 	struct list_head *p;
 
 	if (mterm == &__siw_mon_term) {
-		list_for_each (p, &__siw_mon_term_list) {
+		list_for_each (p, &siw_mon_term_list) {
 			mterm = list_entry(p, struct siw_mon_term, term_link);
 			if (!mterm->nreaders)
 				mterm->monitored = 0;
@@ -361,7 +361,7 @@ void siw_mon_reader_add(struct siw_mon_term *mterm,
 	spin_lock_irqsave(&mterm->lock, flags);
 	if (mterm->nreaders == 0) {
 		if (mterm == &__siw_mon_term) {
-			list_for_each (p, &__siw_mon_term_list) {
+			list_for_each (p, &siw_mon_term_list) {
 				struct siw_mon_term *mt;
 				mt = list_entry(p, struct siw_mon_term, term_link);
 				mt->monitored = 1;
@@ -447,7 +447,7 @@ static void siw_mon_data_submit(struct siw_mon_data *data, int inc_cnt)
 
 	data->inc_cnt = inc_cnt;
 
-	list_for_each (pos, &__siw_mon_term_list) {
+	list_for_each (pos, &siw_mon_term_list) {
 		mterm = list_entry(pos, struct siw_mon_term, term_link);
 		if (mterm->type == data->type) {
 			siw_mon_do_data_submit(mterm, data);
@@ -485,8 +485,8 @@ static void siw_mon_submit_bus_slice(struct siw_mon_data *smdata, void *data)
 //	rx_s_only = (!tx_size && (rx_size < prt_max);
 
 	// 2. total limit : up to buffer limit
-	tx_len = (buf_max) ? min(tx_size, buf_max) : tx_size;
-	rx_len = (buf_max) ? min(rx_size, buf_max) : rx_size;
+	tx_len = ((buf_max) ? min(tx_size, buf_max) : tx_size);
+	rx_len = ((buf_max) ? min(rx_size, buf_max) : rx_size);
 
 	// 3. line count : 1 line has 16 hex numbers
 	tx_cnt = (tx_len + prt_max - 1)/prt_max;
@@ -613,6 +613,8 @@ static int siw_mon_submit_ops_sock(struct siw_mon_data *smdata, int ret)
 			break;
 		case SIW_MON_SOCK_S:
 			break;
+		default :
+			break;
 		};
 	}
 
@@ -621,14 +623,14 @@ static int siw_mon_submit_ops_sock(struct siw_mon_data *smdata, int ret)
 
 	buf_org = (unsigned char *)ops->data[0];
 	buf_len = ops->data[1];
-	buf_len = (ret >= 0) ? min(buf_len, ret) : buf_len;
+	buf_len = ((ret >= 0) ? min(buf_len, ret) : buf_len);
 
 	if (!buf_org ||
 		(!prt_max || (buf_len <= prt_max))) {
 		if (buf_org && buf_len) {
 			buf = buf_org;
 		}
-		ops->data[0] = (buf_len) ? ((size_t)buf) : 0;
+		ops->data[0] = ((buf_len) ? ((size_t)buf) : 0);
 		ops->data[1] = buf_len;
 		ops->priv = 0;
 
@@ -637,7 +639,7 @@ static int siw_mon_submit_ops_sock(struct siw_mon_data *smdata, int ret)
 	}
 
 	tot = buf_len;
-	buf_len = (buf_max) ? min(buf_len, buf_max) : buf_len;
+	buf_len = ((buf_max) ? min(buf_len, buf_max) : buf_len);
 	ops_cnt = (buf_len + prt_max - 1)/prt_max;
 
 	for (i = 0; i < ops_cnt; i++) {
@@ -645,7 +647,7 @@ static int siw_mon_submit_ops_sock(struct siw_mon_data *smdata, int ret)
 
 		buf = buf_org;
 
-		ops->data[0] = (cur) ? ((size_t)buf) : 0;
+		ops->data[0] = ((cur) ? ((size_t)buf) : 0);
 		ops->data[1] = siw_mon_set_buf_size(cur, tot);
 		buf_len -= cur;
 		buf_org += cur;
@@ -674,7 +676,7 @@ static void siw_mon_submit_ops(struct device *dev,
 		},
 	};
 	struct siw_mon_data_ops *ops = &smdata.d.ops;
-	int len = (data != NULL) ? min(OPS_DATA_SZ, size) : 0;
+	int len = ((data != NULL) ? min(OPS_DATA_SZ, size) : 0);
 
 	snprintf(ops->ops, OPS_NAME_SZ, "%s", ops_str);
 	if (len && data) {
@@ -691,7 +693,7 @@ static void siw_mon_submit_ops(struct device *dev,
 	siw_mon_data_submit(&smdata, 1);
 }
 
-static void __siw_mon_init_term(struct siw_mon_term *mterm,
+static void siw_mon_init_term(struct siw_mon_term *mterm,
 				int type, char *name)
 {
 	mterm->type = type;
@@ -706,7 +708,7 @@ static void __siw_mon_init_term(struct siw_mon_term *mterm,
 				type, name);
 }
 
-static void __siw_mon_exit_term(struct siw_mon_term *mterm)
+static void siw_mon_exit_term(struct siw_mon_term *mterm)
 {
 	if (mterm->prt_inited)
 		siw_mon_prt_del(mterm);
@@ -730,11 +732,11 @@ static int siw_mon_subterm_add(int type, char *name)
 		mon_pr_warn("unable to allocate mon terminal[%s]\n", name);
 		return -ENOMEM;
 	}
-	__siw_mon_init_term(mterm, type, name);
+	siw_mon_init_term(mterm, type, name);
 
-	mutex_lock(&__siw_mon_lock);
-	list_add_tail(&mterm->term_link, &__siw_mon_term_list);
-	mutex_unlock(&__siw_mon_lock);
+	mutex_lock(&siw_mon_lock);
+	list_add_tail(&mterm->term_link, &siw_mon_term_list);
+	mutex_unlock(&siw_mon_lock);
 
 	return 0;
 }
@@ -755,27 +757,27 @@ static void siw_mon_subterm_exit(void)
 	struct siw_mon_term *mterm = NULL;
 	struct list_head *p;
 
-	mutex_lock(&__siw_mon_lock);
+	mutex_lock(&siw_mon_lock);
 
-	while (!list_empty(&__siw_mon_term_list)) {
-		p = __siw_mon_term_list.next;
+	while (!list_empty(&siw_mon_term_list)) {
+		p = siw_mon_term_list.next;
 		mterm = list_entry(p, struct siw_mon_term, term_link);
 		list_del(p);
 
-		__siw_mon_exit_term(mterm);
+		siw_mon_exit_term(mterm);
 	}
 
-	mutex_unlock(&__siw_mon_lock);
+	mutex_unlock(&siw_mon_lock);
 }
 
 static void siw_mon_mainterm_init(void)
 {
-	__siw_mon_init_term(&__siw_mon_term, SIW_MON_ALL, SIW_MON_ALL_NAME);
+	siw_mon_init_term(&__siw_mon_term, SIW_MON_ALL, SIW_MON_ALL_NAME);
 }
 
 static void siw_mon_mainterm_exit(void)
 {
-	__siw_mon_exit_term(&__siw_mon_term);
+	siw_mon_exit_term(&__siw_mon_term);
 	memset(&__siw_mon_term, 0, sizeof(__siw_mon_term));
 }
 

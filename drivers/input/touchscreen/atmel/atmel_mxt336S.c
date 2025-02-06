@@ -32,20 +32,6 @@
 #endif
 
 #include "atmel_mxt336S.h"
-
-#ifdef CONFIG_DAUDIO_KK
-#include <mach/daudio.h>
-#include <mach/daudio_info.h>
-#include <mach/daudio_pinctl.h>
-#include <mach/gpio.h>
-#include "serdes.h"
-#elif defined(CONFIG_WIDE_PE_COMMON)
-#include <mobis/daudio.h>
-#include <mobis/daudio_info.h>
-#include <mobis/daudio_pinctl.h>
-#include <mobis/serdes/serdes.h>
-#include <linux/tcc_gpio.h>
-#endif
 #include <linux/gpio.h>
 #include <linux/reboot.h>
 
@@ -77,9 +63,9 @@
 
 #define	TS_100S_TIMER_INTERVAL	1
 
-#define _MXT_REGUP_NOOP		0
-#define _MXT_REGUP_RUNNING	1
-#define _MXT_REGUP_END		2
+#define MXT_REGUP_NOOP		0
+#define MXT_REGUP_RUNNING	1
+#define MXT_REGUP_END		2
 
 #define AUTO_CAL_DISABLE	0
 #define AUTO_CAL_ENABLE		1
@@ -178,7 +164,7 @@ static struct completion pinfault_done;
 
 static struct mxt_data g_mxt;
 
-static int LCD_VER = 0;
+int LCD_VER = 0;
 
 extern int daudio_lcd_version(void);
 
@@ -234,14 +220,17 @@ struct {
 /* for debugging,  enable DEBUG_TRACE */
 static int debug = DEBUG_NONE;
 int mxt_touch_cnt = 5;
+extern int PRINT_SERDES_LOG;
 
 module_param(debug, int, 0644);
 MODULE_PARM_DESC(debug, "Activate debugging output");
 
-static bool LCD_DES_RESET_NEED = 0;
+static int LCD_DES_RESET_NEED = 0;
+static int LCD_DES_SET_ONETIME_CHECK = 1;
 static int LCD_TOUCH_INT_CHECK = 0;
-static bool LCD_TOUCH_RESET_NEED = 0;
+static int LCD_TOUCH_RESET_NEED = 0;
 static int FW_UPDATE_RESULT = 0;
+static u8 serdes_check_value[5];
 
 #define MXT_SERDES_RESET_TIME 4000
 
@@ -326,8 +315,8 @@ static void mxt_update_backup_nvram(
 static int set_mxt_auto_update_exe(struct mxt_data *mxt, int cmd, int state, char* path);
 #endif
 
-static int _check_recalibration(struct mxt_data *mxt);
-static inline void _disable_auto_cal(struct mxt_data *mxt, int locked);
+static int check_recalibration(struct mxt_data *mxt);
+static inline void disable_auto_cal(struct mxt_data *mxt, int locked);
 /* \brief delayed work
  * If enter hardware key, check touch, anti-touch
  * if tch !=0 and atch !=0, execute re-calibration function.
@@ -418,6 +407,47 @@ static void mxt_read_config_crc(struct mxt_data *mxt, uint32_t *crc);
 static int mxt_wait_touch_flag(struct mxt_data *mxt, uint16_t addr_t37, uint16_t addr_t6, unsigned char cmd);
 static int mxt_read_touch_flag(struct mxt_data *mxt, uint16_t addr_t37,	unsigned char page, char *buff, int buff_size);
 static int check_touch_count(struct mxt_data *mxt, int *touch,	int *anti_touch);
+
+struct mxt_data *noti_mxt;
+
+ssize_t mxt_set_adm(struct device *dev, const char *buf, size_t count);
+static int serdes_line_fault_check(struct i2c_client *client);
+
+static int mxt_touch_reboot_notifier(struct notifier_block *this, unsigned long code, void *unused);
+
+static struct notifier_block mxt_reboot_notifier = {
+ .notifier_call =       mxt_touch_reboot_notifier,
+};
+static int mxt_touch_reboot_notifier(struct notifier_block *this,
+                                        unsigned long code, void *unused)
+{
+        struct device *dev = NULL;
+        char buf[32] = {0, };
+
+        printk("%s [START] code : %d\n",__func__,code);
+        if (noti_mxt == NULL)
+        {
+                pr_err("g_ts value is NULL!!! %s, %d\n", __func__, __LINE__);
+                return NOTIFY_DONE;
+        }
+        dev = &noti_mxt->client->dev;
+        if (dev == NULL)
+        {
+                pr_err("dev value is NULL!!! %s, %d\n", __func__, __LINE__);
+                return NOTIFY_DONE;
+        }
+
+        if ((code == SYS_HALT) || (code == SYS_POWER_OFF) || (code == SYS_RESTART)) // need to check HALT or POWER_OFF
+        {
+                buf[0] = '1';
+                if (mxt_set_adm(dev, buf, 1) < 0)
+                {
+                        pr_err("set_adm return value is zero!!! %s, %d\n", __func__, __LINE__);
+                        return NOTIFY_DONE;
+                }
+        }
+        return NOTIFY_DONE;
+}
 
 static void mxt_read_config_crc(struct mxt_data *mxt, uint32_t *crc)
 {
@@ -575,7 +605,7 @@ static void hw_reset_gpio(struct mxt_data* mxt)
 	int gpio_enable = 0;
 	int gpio_ret = 0;
 
-	if (touch_scl < 0 || touch_sda < 0)
+	if ((touch_scl < 0) || (touch_sda < 0))
 		gpio_enable = -1;
 	if (gpio_enable != -1) {
 
@@ -675,7 +705,7 @@ void hw_reset_chip(struct mxt_data *mxt)
 	}
 
 	if(mxt->check_auto_cal_flag == AUTO_CAL_DISABLE)
-		_disable_auto_cal(mxt, true);
+		disable_auto_cal(mxt, true);
 }
 
 /**
@@ -695,7 +725,7 @@ static int check_jig_detection(struct mxt_data *mxt)
 				  , gpio_get_value(gpio_jig_det) ? "Disconnected" : "Connected");
 #endif
 
-	if (mxt) {
+	if ((mxt != NULL ) && mxt) {
 		if (gpio_get_value(gpio_jig_det) == 0)
 			jig_det = 1;
 		else
@@ -746,6 +776,7 @@ static void gpio_func_enable(struct mxt_data* mxt, u8 enable)
   * Add update jig detection func
   * return jig_deetection status
   **/
+#ifdef MXT_JIG_DETECT
 static int update_jig_detection(struct mxt_data *mxt)
 {
 	int jig_det = check_jig_detection(mxt);
@@ -771,6 +802,7 @@ static int update_jig_detection(struct mxt_data *mxt)
 	mxt->jig_detected = jig_det;
 	return jig_det;
 }
+#endif
 int try_sw_reset_chip(struct mxt_data *mxt, u8 mode)
 {
 	int err;
@@ -917,7 +949,7 @@ static void mxt_release_all_fingers(struct mxt_data *mxt)
 		/* ADD TRACKING_ID*/
 		//REPORT_MT(id, mtouch_info[id].x, mtouch_info[id].y,
 		//		mtouch_info[id].pressure, mtouch_info[id].size);
-	if(touch_type == 5 || touch_type == 6 || touch_type == 8) //1189T, 641T
+	if((touch_type == 5) || (touch_type == 6) || (touch_type == 8)) //1189T, 641T
 	{
 		/* 160615 - release touch */
 		input_report_key(mxt->input, BTN_TOUCH, 0);
@@ -956,7 +988,11 @@ static inline void mxt_prerun_reset(struct mxt_data *mxt, bool r_irq)
 	mxt_release_all_fingers(mxt);
 	mxt_release_all_keys(mxt);
 	if (r_irq)
-		disable_irq(mxt->client->irq);
+		if(mxt->irq_enabled)
+	        {
+	                disable_irq(mxt->client->irq);
+	                mxt->irq_enabled = false;
+	        }
 }
 
 static inline void mxt_postrun_reset(struct mxt_data *mxt, bool r_irq)
@@ -968,10 +1004,14 @@ static inline void mxt_postrun_reset(struct mxt_data *mxt, bool r_irq)
 	**/
 //	mxt_check_touch_ic_timer_start(mxt);
 	if (r_irq)
-		enable_irq(mxt->client->irq);
+		if(!mxt->irq_enabled)
+	        {
+	                enable_irq(mxt->client->irq);
+	                mxt->irq_enabled = true;
+	        }
 }
 
-static int _check_recalibration(struct mxt_data *mxt)
+static int check_recalibration(struct mxt_data *mxt)
 {
 	int rc = 0;
 	int tch_ch = 0 , atch_ch = 0;
@@ -1011,7 +1051,7 @@ static int _check_recalibration(struct mxt_data *mxt)
 	return rc;
 }
 
-static inline void _disable_auto_cal(struct mxt_data *mxt, int locked)
+static inline void disable_auto_cal(struct mxt_data *mxt, int locked)
 {
 	if( NULL != mxt->object_table ) {
 		u16 addr;
@@ -1043,7 +1083,7 @@ u16 get_object_address(uint8_t object_type,
 		obj = object_table[object_link[object_type]];
 		if (obj.type == object_type) {
 			if (obj.instances >= instance) {
-				address = obj.chip_addr + (obj.size + 1) * instance;
+				address = obj.chip_addr + ((obj.size + 1) * instance);
 				return address;
 			}
 		}
@@ -1055,7 +1095,7 @@ u16 get_object_address(uint8_t object_type,
 			address_found = 1;
 			/* Are there enough instances defined in the FW? */
 			if (obj.instances >= instance) {
-				address = obj.chip_addr + (obj.size + 1) * instance;
+				address = obj.chip_addr + ((obj.size + 1) * instance);
 			}
 			else {
 				return 0;
@@ -1170,7 +1210,7 @@ static int serdes_i2c_reset(struct i2c_client *client)
 
         printk("-----------%s\n", __func__);
 
-        for(i = 1; i < sizeof(serdes_1280_720_8_0_config_Si_BOE) / sizeof(serdes_config_5) ;i++) {
+        for(i = 1; i < (sizeof(serdes_1280_720_8_0_config_Si_BOE) / sizeof(serdes_config_5)) ;i++) {
                 retry = 0;
 
                 client->addr = serdes_1280_720_8_0_config_Si_BOE[i].chip_addr;
@@ -1187,12 +1227,12 @@ static int serdes_i2c_reset(struct i2c_client *client)
 
                 if(ret != 3) {
                         dev_err(&client->dev, "%s: i2c fail\n", __func__);
-                        goto out_i2c;
+			goto out_i2c;
                 }
                 if(client->addr != DES_DELAY)
                 {
                         ret = i2c_master_send(client, buf, 2);
-                        ret = i2c_master_recv(client, buf2, 3);
+                        ret = i2c_master_recv(client, buf2, 1);
                 }
 
                 if(client->addr == SER_ADDRESS)
@@ -1207,6 +1247,9 @@ static int serdes_i2c_reset(struct i2c_client *client)
                 printk("read:0x%02x\n",buf2[0]);
         }
         printk("-----------%s Success\n", __func__);
+
+	LCD_DES_SET_ONETIME_CHECK = 1;
+
         client->addr = addr;
         return 0;
 out_i2c:
@@ -1225,7 +1268,7 @@ static int serdes_i2c_show(struct i2c_client *client)
 
         printk("-----------%s\n", __func__);
 
-        for(i = 0; i < sizeof(serdes_1280_720_8_0_config_Si_BOE) / sizeof(serdes_config_5) ;i++) {
+        for(i = 0; i < (sizeof(serdes_1280_720_8_0_config_Si_BOE) / sizeof(serdes_config_5)) ;i++) {
 
                 client->addr = serdes_1280_720_8_0_config_Si_BOE[i].chip_addr;
                 buf1[0] = (serdes_1280_720_8_0_config_Si_BOE[i].reg_addr >> 8) & 0xff;
@@ -1236,7 +1279,7 @@ static int serdes_i2c_show(struct i2c_client *client)
                         continue;
 
                 ret = i2c_master_send(client, buf1, 2);
-                ret = i2c_master_recv(client, buf2, 3);
+                ret = i2c_master_recv(client, buf2, 1);
 
                 if(client->addr == SER_ADDRESS)
                         printk("SER ");
@@ -1250,7 +1293,7 @@ static int serdes_i2c_show(struct i2c_client *client)
                 printk("read:0x%02x\n",buf2[0]);
         }
         printk("-----------%s Success\n", __func__);
-out_i2c:
+
         client->addr = addr;
 	return 0;
 }
@@ -1337,7 +1380,7 @@ static int serdes_i2c_bitrate_6gbps_to_3gbps(struct i2c_client *client)
                 client->addr = serdes_3gbps_config[i][0];
                 buf[0] = (serdes_3gbps_config[i][1] >> 8) & 0xff;
                 buf[1] = serdes_3gbps_config[i][1] & 0xff;
-                buf[2] = serdes_3gbps_config[i][2];
+                buf[2] = serdes_3gbps_config[i][2] & 0xff;
 
                 if(client->addr == DES_DELAY)
                 {
@@ -1351,39 +1394,82 @@ static int serdes_i2c_bitrate_6gbps_to_3gbps(struct i2c_client *client)
         return 0;
 }
 
-static int des_i2c_set_check(struct i2c_client *client)
+static int i2c_set_check(struct i2c_client *client, serdes_config_5 *reglist, int size)
 {
         int ret;
         int i;
         u8 buf[2];
         u8 buf2[3];
         int check_ret;
-        int retry;
         unsigned short addr;
-        struct mip4_ts_info *info = i2c_get_clientdata(client);
-        int check_bit[2] = {0x7f,0xf7};
+
+        int count = 0;
+
+	unsigned int serdes_config_size = sizeof(serdes_config_5);
+
+	if((serdes_config_size != 0) && ((size / serdes_config_size) <= INT_MAX))
+        {
+                count = size / serdes_config_size;
+        }
+        else
+        {
+                printk("%s serdes_config_size : %d Error",__func__,serdes_config_size);
+                return -1;
+        }
 
         addr = client->addr;
 
         check_ret = 0;
 
-        for(i=0;i<2;i++)
+        for(i = 0; i < count; i++)
         {
-                client->addr = des_set_check[i][0];
-                buf[0] = (des_set_check[i][1] >> 8) & 0xff;
-                buf[1] = des_set_check[i][1] & 0xff;
+                client->addr = reglist[i].chip_addr;
+                buf[0] = (reglist[i].reg_addr >> 8) & 0xff;
+                buf[1] = reglist[i].reg_addr & 0xff;
 
-		ret = i2c_master_send(client, buf, 2);
-                ret = i2c_master_recv(client, buf2, 3);
+                ret = i2c_master_send(client, buf, 2);
+                ret = i2c_master_recv(client, buf2, 1);
 
-                if((buf2[0]&check_bit[i]) != des_set_check[i][2]){
-                        printk("%s Register(0x%x) Value(0x%x) != Read(0x%x)\n",__func__,des_set_check[i][1],des_set_check[i][2],buf2[0]);
-                        check_ret ++;
+                if(ret != 1)
+                {
+                        printk("%s : %s Register(0x%04x) i2c fail\n",__func__,((client->addr == SER_ADDRESS) ? "SER" : "DES") , reglist[i].reg_addr);
+                        continue;
+                }
+
+                if((buf2[0]&reglist[i].value) != reglist[i].right_value)
+                {
+                        printk("%s : %s Register(0x%04x) Value(0x%02x) != Read(0x%02x)(Raw : 0x%02x)\n",__func__,((client->addr == SER_ADDRESS) ? "SER" : "DES") ,reglist[i].reg_addr,reglist[i].right_value, buf2[0]&reglist[i].value, buf2[0]);
+			if(check_ret < count)
+	                        check_ret++;
+                }
+                else if(false)
+                {
+                        printk("%s : %s Register(0x%04x) Value(0x%02x) == Read(0x%02x)(Raw : 0x%02x)\n",__func__,((client->addr == SER_ADDRESS) ? "SER" : "DES") ,reglist[i].reg_addr,reglist[i].right_value, buf2[0]&reglist[i].value, buf2[0]);
                 }
         }
 
         client->addr = addr;
+
         return check_ret;
+}
+
+static int serdes_i2c_set_check(struct i2c_client *client)
+{
+        return i2c_set_check(client, serdes_set_check, sizeof(serdes_set_check));
+}
+
+static int des_i2c_set_check(struct i2c_client *client)
+{
+        int lcd_type;
+
+        serdes_config_5 *reglist;
+
+        reglist = des_oldi_set_check_1280_720_8_0_Si_BOE;
+
+        LCD_DES_SET_ONETIME_CHECK = 0;
+
+        return (i2c_set_check(client, des_gpio_set_check, sizeof(des_gpio_set_check)) +
+                 i2c_set_check(client, reglist, sizeof(reglist)));
 }
 
 static int ser_i2c_bitrate_check(struct i2c_client *client)
@@ -1394,7 +1480,6 @@ static int ser_i2c_bitrate_check(struct i2c_client *client)
         u8 buf2[3];
         int retry;
         unsigned short addr;
-        struct mip4_ts_info *info = i2c_get_clientdata(client);
 
         addr = client->addr;
 
@@ -1403,9 +1488,9 @@ static int ser_i2c_bitrate_check(struct i2c_client *client)
         buf[1] = ser_bitrate_check[0][1] & 0xff;
 
         ret = i2c_master_send(client, buf, 2);
-        ret = i2c_master_recv(client, buf2, 3);
+        ret = i2c_master_recv(client, buf2, 1);
 
-        printk("%s Ser bitrate = 0x%x\n",__func__,buf2[0]);
+        printk("%s Ser bitrate = 0x%02x\n",__func__,buf2[0]);
 
         client->addr = addr;
         return buf2[0];
@@ -1427,9 +1512,9 @@ static int des_i2c_bitrate_check(struct i2c_client *client)
         buf[1] = des_bitrate_check[0][1] & 0xff;
 
         ret = i2c_master_send(client, buf, 2);
-        ret = i2c_master_recv(client, buf2, 3);
+        ret = i2c_master_recv(client, buf2, 1);
 
-        printk("%s Des bitrate = 0x%x\n",__func__,buf2[0]);
+        printk("%s Des bitrate = 0x%02x\n",__func__,buf2[0]);
 
         client->addr = addr;
         return buf2[0];
@@ -1443,6 +1528,7 @@ static int serdes_line_fault_check(struct i2c_client *client)
         u8 buf2[3];
         int retry;
         unsigned short addr;
+	struct mxt_data *mxt = i2c_get_clientdata(client);
 
         addr = client->addr;
 
@@ -1456,13 +1542,10 @@ static int serdes_line_fault_check(struct i2c_client *client)
         mdelay(20);
 
         ret = i2c_master_send(client, buf, 2);
-        ret = i2c_master_recv(client, buf2, 3);
+        ret = i2c_master_recv(client, buf2, 1);
 
-        printk("%s 0x%x -> 0x%x\n",__func__, buf2[0], buf2[0]&0x0C);
-        if((buf2[0] & 0x0C) == 0x08)
-                check_ret = 1;
-        else
-                check_ret = 0;
+        printk("%s 0x%02x -> 0x%02x\n",__func__, buf2[0], buf2[0]&0x0C);
+	check_ret = buf2[0];
 
         buf[2] = serdes_line_fault_config[1][2];
 
@@ -1473,9 +1556,10 @@ static int serdes_line_fault_check(struct i2c_client *client)
         buf[1] = serdes_line_fault_config[2][1] & 0xff;
 
         ret = i2c_master_send(client, buf, 2);
-        ret = i2c_master_recv(client, buf2, 3);
+        ret = i2c_master_recv(client, buf2, 1);
 
 	client->addr = addr;
+
         return check_ret;
 }
 
@@ -1487,6 +1571,7 @@ static int serdes_i2c_connect(struct i2c_client *client)
         u8 buf2[3];
         int retry;
         unsigned short addr;
+	struct mxt_data *mxt = i2c_get_clientdata(client);
 
         addr = client->addr;
 
@@ -1495,45 +1580,134 @@ static int serdes_i2c_connect(struct i2c_client *client)
         buf[1] = serdes_link_lock_config[0][1] & 0xff;
 
         ret = i2c_master_send(client, buf, 2);
-        ret = i2c_master_recv(client, buf2, 3);
+        ret = i2c_master_recv(client, buf2, 1);
 
         if((buf2[0]&0xfa)!=0xda) {
-                printk(KERN_ERR "---------%s: i2c read  (%d), {0x%x, 0x%x ,0x%x,0x%x}\n", __func__, ret, client->addr, buf2[0], buf2[1], buf2[2]);
+                printk(KERN_ERR "---------%s: i2c read  (%d), {0x%02x, 0x%02x}\n", __func__, ret, client->addr, buf2[0]);
         }
 
         client->addr = addr;
+
+	if(ret != 1)
+		return -1;
+
         return buf2[0];
 }
 
-static void mxt_serdes_reset(struct mxt_data *mxt)
+static void serdes_video_signal_print(int lock)
 {
-	u8 val;
+        int i;
+
+        for(i = 0; i < (sizeof(serdes_video_signal_config) / sizeof(serdes_config_5)) ; i++)
+        {
+                if(((lock&0xfa)==0xda) || (serdes_video_signal_config[i].chip_addr == SER_ADDRESS))
+                        printk(KERN_ERR "%s : {%s register : 0x%04x read : 0x%02x}\n", __func__, ((serdes_video_signal_config[i].chip_addr == SER_ADDRESS) ? "SER" : "DES"), serdes_video_signal_config[i].reg_addr, serdes_check_value[i]);
+        }
+
+        return;
+}
+
+static int serdes_video_signal_check(struct i2c_client *client, u8 lock_bit)
+{
+        int ret;
+        int i;
+        u8 buf[3];
+        u8 buf2[3];
+        int retry;
+        unsigned short addr;
+        int need_log = 0;
+	struct mxt_data *mxt = i2c_get_clientdata(client);
+
+        addr = client->addr;
+
+        for(i = 0; i < (sizeof(serdes_video_signal_config) / sizeof(serdes_config_5)) ; i++)
+        {
+		if((serdes_video_signal_config[i].chip_addr == DES_ADDRESS) && ((lock_bit&0xfa) != 0xda) && (lock_bit != 0))
+                        continue;
+
+                client->addr = serdes_video_signal_config[i].chip_addr;
+                buf[0] = (serdes_video_signal_config[i].reg_addr >> 8) & 0xff;
+                buf[1] = serdes_video_signal_config[i].reg_addr & 0xff;
+
+                ret = i2c_master_send(client, buf, 2);
+                ret = i2c_master_recv(client, buf2, 1);
+
+		serdes_check_value[i] = buf2[0];
+
+		if(PRINT_SERDES_LOG || (lock_bit == 0))
+                {
+                        printk(KERN_ERR "%s : ret (%d), {%s register : 0x%04x read : 0x%02x}\n", __func__, ret, ((client->addr == SER_ADDRESS) ? "SER" : "DES"), serdes_video_signal_config[i].reg_addr, buf2[0]);
+                }
+
+		if(((serdes_video_signal_config[i].value == 0xFF) ? (buf2[0] >= serdes_video_signal_config[i].right_value) : ((buf2[0]&serdes_video_signal_config[i].value) != serdes_video_signal_config[i].right_value)))
+                {
+                        need_log = 1;
+                }
+        }
+
+	if(PRINT_SERDES_LOG)
+		PRINT_SERDES_LOG = 0;
+
+        client->addr = addr;
+
+        return need_log;
+}
+
+static int mxt_serdes_reset(struct mxt_data *mxt)
+{
+	int lock_pin = 0;
+	int line_fault = -1;
 	int ret = 0, i = 0;
-	u8 ser_bitrate = 0;
-        u8 des_bitrate = 0;
+	int ser_bitrate = 0;
+        int des_bitrate = 0;
 	struct i2c_client *client = mxt->client;
+	int need_log = 0;
+	int lock_pin_begin_value = 0;
 
 	mutex_lock(&mxt->serdes.lock);
 
-	val = serdes_i2c_connect(client);
+	if(mxt->irq_enabled)
+	{
+		disable_irq(mxt->client->irq);
+		mxt->irq_enabled = false;
+	}
 
-	if((val&0xfa)==0xda &&LCD_DES_RESET_NEED == 2)
+	lock_pin = serdes_i2c_connect(client);
+	lock_pin_begin_value = lock_pin;
+
+	if(lock_pin == -1)
+	{
+		LCD_DES_RESET_NEED = 2;
+		printk("Ser I2C Error Occur : LCD_DES_RESET_NEED set %d\n",LCD_DES_RESET_NEED);
+	}
+
+	need_log = serdes_video_signal_check(client, lock_pin);
+
+	if(((lock_pin&0xfa) == 0xda) && (LCD_DES_RESET_NEED == 2))
         {
                 LCD_DES_RESET_NEED = 0;
                 printk("LCD_DES_RESET_NEED set 0\n");
         }
 
-	if(!LCD_DES_RESET_NEED)
-                if(((val&0xfa)==0xda) && (des_i2c_set_check(client)!=0))
+	// Check Des Register Set
+        if((!LCD_DES_RESET_NEED) && ((lock_pin&0xfa)==0xda))
+        {
+                if(serdes_i2c_set_check(client)!=0)
                 {
                         LCD_DES_RESET_NEED = 1;
-                        printk("LCD_DES_RESET_NEED set %d\n", LCD_DES_RESET_NEED);
+			printk("LCD_DES_RESET_NEED set because setting not complete%d\n", LCD_DES_RESET_NEED);
                 }
+		else if(LCD_DES_SET_ONETIME_CHECK && (des_i2c_set_check(client) != 0))
+                {
+                        LCD_DES_RESET_NEED = 1;
+                        printk("LCD_DES_RESET_NEED set because wrong setting value%d\n", LCD_DES_RESET_NEED);
+                }
+        }
 
-	if(((val&0xfa)==0xda) && LCD_DES_RESET_NEED == 1)
+	if(((lock_pin&0xfa)==0xda) && LCD_DES_RESET_NEED == 1)
         {
                 printk("---------%s: DISPLAY & TouchIC Recovery !!! \n", __func__);
-                printk("%s mip4_read_byte :0x[%x]!!!\r\n", __func__, val);
+                printk("%s Lock pin :0x[%x]!!!\r\n", __func__, lock_pin);
 
                 ret = serdes_i2c_reset(client);
 
@@ -1545,15 +1719,34 @@ static void mxt_serdes_reset(struct mxt_data *mxt)
                 }
                 else
                 {
-			LCD_DES_RESET_NEED = 0;
-			LCD_TOUCH_INT_CHECK = 2;
+			ser_bitrate = ser_i2c_bitrate_check(client);
+
+                        if(ser_bitrate != 0x84)
+                        {
+                                serdes_i2c_bitrate_6gbps_to_3gbps(client);
+                                mdelay(100);
+
+                                ser_bitrate = ser_i2c_bitrate_check(client);
+                                des_bitrate = des_i2c_bitrate_check(client);
+
+                                if((ser_bitrate == 0x84)&&(des_bitrate == 0x01))
+                                        printk("%s DES Set 3Gbps\n",__func__);
+                                else
+                                {
+                                        printk("%s DES Doesn't Set 3Gbps SER : 0x%x DES : 0x%x\n",__func__, ser_bitrate, des_bitrate);
+                                }
+                        }
+
 			hw_reset_chip(mxt);
+			LCD_DES_RESET_NEED = 0;
+                        LCD_TOUCH_INT_CHECK = 2;
 			printk("%s LCD_DES_RESET_NEED set %d\n", __func__, LCD_DES_RESET_NEED);
                 }
         }
-	else if(((val)&0xfa)!=0xda)
+	else if(((lock_pin)&0xfa)!=0xda && lock_pin != -1)
         {
-                if(serdes_line_fault_check(client))
+		line_fault = serdes_line_fault_check(client);
+		if(line_fault != 0x2E)
                 {
                         printk("---------%s: Line Fault OK !!! \n", __func__);
 
@@ -1565,61 +1758,67 @@ static void mxt_serdes_reset(struct mxt_data *mxt)
                                 ser_bitrate = ser_i2c_bitrate_check(client);
                                 des_bitrate = des_i2c_bitrate_check(client);
 
-                                serdes_i2c_reset(client);
+				lock_pin = serdes_i2c_connect(client);
 
-                                serdes_i2c_bitrate_6gbps_to_3gbps(client);
-
-                                mdelay(100);
-
-                                ser_bitrate = ser_i2c_bitrate_check(client);
-                                des_bitrate = des_i2c_bitrate_check(client);
-
-                                if(des_bitrate != 0x01)
+				if(((lock_pin)&0xfa)==0xda)
                                 {
-                                        printk("%s DES Doesn't Set 3Gbps\n",__func__);
-                                }
-                                else
-                                {
-                                        printk("%s DES Set 3Gbps\n",__func__);
+                                        if(serdes_i2c_set_check(client)!=0)
+						serdes_i2c_reset(client);
 
-                                        LCD_DES_RESET_NEED = 0;
-                                        LCD_TOUCH_INT_CHECK = 2;
-					hw_reset_chip(mxt);
-                                        printk("%s LCD_DES_RESET_NEED set %d\n", __func__, LCD_DES_RESET_NEED);
-                                }
+	                                serdes_i2c_bitrate_6gbps_to_3gbps(client);
+
+	                                mdelay(100);
+
+	                                ser_bitrate = ser_i2c_bitrate_check(client);
+	                                des_bitrate = des_i2c_bitrate_check(client);
+
+        	                        if(des_bitrate != 0x01)
+	                                {
+	                                        printk("%s DES Doesn't Set 3Gbps\n",__func__);
+	                                }
+	                                else
+	                                {
+	                                        printk("%s DES Set 3Gbps\n",__func__);
+
+						hw_reset_chip(mxt);
+						LCD_DES_RESET_NEED = 0;
+	                                        LCD_TOUCH_INT_CHECK = 2;
+	                                        printk("%s LCD_DES_RESET_NEED set %d\n", __func__, LCD_DES_RESET_NEED);
+	                                }
+				}
                         }
-                        else if(ser_bitrate==0x88)
+                        else
                         {
                                 serdes_i2c_bitrate_6gbps_to_3gbps(client);
                                 ser_bitrate = ser_i2c_bitrate_check(client);
                                 des_bitrate = des_i2c_bitrate_check(client);
 
-                                serdes_i2c_reset(client);
+				lock_pin = serdes_i2c_connect(client);
 
-                                des_i2c_bitrate_3gbps_to_6gbps(client);
-                                ser_i2c_bitrate_3gbps_to_6gbps(client);
-
-                                ser_bitrate = ser_i2c_bitrate_check(client);
-                                des_bitrate = des_i2c_bitrate_check(client);
-
-                                if(des_bitrate != 0x02)
+                                if(((lock_pin)&0xfa)==0xda)
                                 {
-                                        printk("%s DES Doesn't Set 6Gbps\n",__func__);
-                                }
-				else
-                                {
-                                        printk("%s DES Set 6Gbps\n",__func__);
+                                        if(serdes_i2c_set_check(client)!=0)
+						serdes_i2c_reset(client);
 
-                                        LCD_DES_RESET_NEED = 0;
-                                        LCD_TOUCH_INT_CHECK = 2;
-					hw_reset_chip(mxt);
-                                        printk("%s LCD_DES_RESET_NEED set %d\n", __func__, LCD_DES_RESET_NEED);
-                                }
+	                                if(des_bitrate != 0x01)
+	                                {
+	                                        printk("%s DES Doesn't Set 3Gbps\n",__func__);
+	                                }
+					else
+	                                {
+	                                        printk("%s DES Set 3Gbps\n",__func__);
+
+						hw_reset_chip(mxt);
+						LCD_DES_RESET_NEED = 0;
+	                                        LCD_TOUCH_INT_CHECK = 2;
+	                                        printk("%s LCD_DES_RESET_NEED set %d\n", __func__, LCD_DES_RESET_NEED);
+	                                }
+				}
                         }
                 }
 		else
                 {
-                        printk("---------%s: HDMI Connect ERROR !!! \n", __func__);
+                        printk("---------%s: Line Fault ERROR !!! \n", __func__);
                         if(LCD_DES_RESET_NEED != 2)
                         {
                                 LCD_DES_RESET_NEED = 2;
@@ -1629,17 +1828,35 @@ static void mxt_serdes_reset(struct mxt_data *mxt)
         }
 
 	// Serdes Connect Dignosis
-        if((val&0xfa)==0xda)
+        if((lock_pin&0xfa)==0xda)
         {
                 set_serdes_conn_check(0);
         }
         else
         {
                 set_serdes_conn_check(2);
+		need_log = 1;
         }
+
+	if(need_log)
+        {
+		serdes_video_signal_print(lock_pin);
+		mobis_serdes_need_log();
+		if(line_fault < 0 && lock_pin != -1)
+			line_fault = serdes_line_fault_check(client);
+		mobis_serdes_status_count_update(serdes_check_value, lock_pin_begin_value, line_fault);
+		mobis_idtc_check_write(serdes_check_value, lock_pin_begin_value, line_fault, false, false);
+        }
+
+	if(!mxt->irq_enabled)
+	{
+		enable_irq(mxt->client->irq);
+		mxt->irq_enabled = true;
+	}
 	
 	mutex_unlock(&mxt->serdes.lock);
 
+	return lock_pin;
 }
 
 static void mxt_touch_reset_alive(struct mxt_data *mxt)
@@ -1652,29 +1869,34 @@ static void mxt_touch_reset_alive(struct mxt_data *mxt)
 	if(!get_montype())
                 mutex_lock(&mxt->serdes.lock);
 	
-	if(LCD_TOUCH_INT_CHECK >= 2) {
+	if(LCD_TOUCH_INT_CHECK > 0) {
 		LCD_TOUCH_INT_CHECK = 0;
 	}
 	else {
 		LCD_TOUCH_RESET_NEED = 1;
 	}
 
-	if(LCD_TOUCH_RESET_NEED == 1) {
+	if((LCD_TOUCH_RESET_NEED == 1) || (mxt_initialize_device == false)) {
 		printk("%s LCD_TOUCH_RESET [START]\n", __func__);
-                
+
+		if (mxt_initialize_device == false) {
+                        printk(KERN_ERR "[%s:%d] mxt_initialize false........ \r\n", __func__, __LINE__);
+                        mxt_initialize_device = true;
+                }
+
 		mxt_prerun_reset(mxt, true);
                 hw_reset_chip(mxt);
                 mxt_postrun_reset(mxt, true);	
 		
 		LCD_TOUCH_RESET_NEED = 0;
 		LCD_TOUCH_INT_CHECK = 0;
-		if (mxt_initialize_device == false) {
-			printk(KERN_ERR "[%s:%d] mxt_initialize false........ \r\n", __func__, __LINE__);
-                        mxt_initialize_device = true;
-                       	enable_irq(mxt->irq);
-		}
 
 		printk("%s LCD_TOUCH_RESET [DONE]\n", __func__);
+		mobis_idtc_check_write(serdes_check_value, 0, 0, true, false);
+	}
+	else
+	{
+		mobis_idtc_check_write(serdes_check_value, 0, 0, false, false);
 	}
 
 	if(!get_montype())
@@ -1704,15 +1926,19 @@ static void mxt_touch_reset(struct mxt_data *mxt)
                         hw_reset_chip(mxt);
                         mxt_postrun_reset(mxt, true);
                         // Touch Error Logging
-                        gtouch_ic_reset_cnt++;
+			if (gtouch_ic_reset_cnt <= 10)
+			{
+				gtouch_ic_reset_cnt++;
+			}
+
                         if (gtouch_ic_reset_cnt > 10) {
                                 gtouch_ic_reset_cnt = 10;
                                 gtouch_ic_error = 1;
                         }
-                        goto exit;
+                        goto mxt_exit;
                 }
                 else {
-                        if (buf[0] == MAXTOUCH_FAMILYID||buf[0] == MAXTOUCH_FAMILYID_S) {
+                        if ((buf[0] == MAXTOUCH_FAMILYID) || (buf[0] == MAXTOUCH_FAMILYID_S)) {
                                 gtouch_ic_reset_cnt = 0;
 
                                 /* 2015/08/21, YG_US 분리형 모니터 부팅시 터치 IC 연결 안된 상황 복구 코드*/
@@ -1725,7 +1951,12 @@ static void mxt_touch_reset(struct mxt_data *mxt)
                                         hw_reset_chip(mxt);
                                         mxt_postrun_reset(mxt, true);
 
-                                        enable_irq(mxt->irq);
+					if(!mxt->irq_enabled)
+				        {
+				                enable_irq(mxt->client->irq);
+			        	        mxt->irq_enabled = true;
+				        }
+
                                 }
                                //printk("%s Touch IC OK !\n", __func__);
                         }
@@ -1735,19 +1966,23 @@ static void mxt_touch_reset(struct mxt_data *mxt)
                                 hw_reset_chip(mxt);
                                 mxt_postrun_reset(mxt, true);
                                 // Touch Error Logging
-                                gtouch_ic_reset_cnt++;
+				if (gtouch_ic_reset_cnt <= 10)
+				{
+	                                gtouch_ic_reset_cnt++;
+				}
+
                                 if (gtouch_ic_reset_cnt > 10) {
                                         gtouch_ic_reset_cnt = 10;
                                         gtouch_ic_error = 1;
                                 }
-                                goto exit;
+                                goto mxt_exit;
                         }
                 }
 #ifdef MXT_JIG_DETECT
         }
 #endif
 
-exit:
+mxt_exit:
         if(!get_montype())
                 mutex_unlock(&mxt->serdes.lock);
         return ;
@@ -1770,9 +2005,8 @@ static void mxt_serdes_reset_dwork(struct work_struct *work)
 	mxt_debug_trace(mxt, "%s\n", __func__);
 	
 	if(!get_montype()){
-                mxt_serdes_reset(mxt);
-
-                if(LCD_DES_RESET_NEED != 1) {
+                if((mxt_serdes_reset(mxt)&0xfa) == 0xda)
+		{
                         mxt_touch_reset_alive(mxt);
                 }
         }
@@ -1832,7 +2066,7 @@ int mxt_read_no_delay_block(struct i2c_client *client,
 	msg[1].len   = length;
 	msg[1].buf   = (u8 *) value;
 
-	if  ((res = i2c_transfer(adapter, msg, 2))) {
+	if  ((res = i2c_transfer(adapter, msg, 2)) >= 0) {
 		// mxt->last_read_addr = addr;
 
 		return 0;
@@ -1888,7 +2122,12 @@ int mxt_read_block(struct i2c_client *client,
 	msg[1].len   = length;
 	msg[1].buf   = (u8 *) value;
 
-	if  ((res = i2c_transfer(adapter, msg, 2))) {
+	if((msg[0].addr != 0x4B) && (msg[0].addr !=0x4A))
+	{
+		printk("Client Addr 0x%x\n",msg[0].addr);
+	}
+
+	if  ((res = i2c_transfer(adapter, msg, 2))>=0) {
 		// mxt->last_read_addr = addr;
 #if defined(CONFIG_DISASSEMBLED_MONITOR)
 		udelay(100);
@@ -2071,7 +2310,7 @@ int calculate_infoblock_crc(u32 *crc_result, struct mxt_data *mxt)
 	client = mxt->client;
 
 	crc_area_size = MXT_ID_BLOCK_SIZE +
-					mxt->device_info.num_objs * MXT_OBJECT_TABLE_ELEMENT_SIZE;
+					(mxt->device_info.num_objs * MXT_OBJECT_TABLE_ELEMENT_SIZE);
 
 	mem = kmalloc(crc_area_size, GFP_KERNEL);
 
@@ -2121,11 +2360,11 @@ int calculate_drv_config_crc(uint32_t *crc_result, struct mxt_data *mxt)
 		}
 
 		if(mxt->object_table[i].type == 38) {
-			off_addr = mxt->object_table[i].chip_addr + mxt->object_table[i].instances * mxt->object_table[i].size;
+			off_addr = mxt->object_table[i].chip_addr + (mxt->object_table[i].instances * mxt->object_table[i].size);
 		}
 	}
 
-	crc_area_size = mxt->object_table[last_obj].chip_addr + mxt->object_table[last_obj].instances * mxt->object_table[last_obj].size;
+	crc_area_size = mxt->object_table[last_obj].chip_addr + (mxt->object_table[last_obj].instances * mxt->object_table[last_obj].size);
 
 	mem = kmalloc(crc_area_size, GFP_KERNEL);
 
@@ -2192,7 +2431,7 @@ static void process_T9_message(u8 *message, struct mxt_data *mxt)
 	xpos = message[2];
 	xpos = xpos << 4;
 	xpos = xpos | (message[4] >> 4);
-	if(LCD_VER == DAUDIOKK_LCD_PI_10_25_1920_720_PIO_AUO && !get_oemtype())
+	if((LCD_VER == DAUDIOKK_LCD_PI_10_25_1920_720_PIO_AUO) && !get_oemtype())
 		xpos >>= 2;
 
 	ypos = message[3];
@@ -2271,7 +2510,7 @@ static void process_T9_message(u8 *message, struct mxt_data *mxt)
 	 *  a palm or a face). For example, the area ... */
 	mtouch_info[touch_id].size = message[MXT_MSG_T9_TCHAREA];
 
-	if (prev_touch_id >= touch_id || pressed_or_released) {
+	if ((prev_touch_id >= touch_id) || pressed_or_released) {
 		for (i = 0; i < MXT_MAX_NUM_TOUCHES  ; ++i) {
 			if (mtouch_info[i].pressure == -1)
 				continue;
@@ -2392,6 +2631,7 @@ static void process_T100_message(u8 *message, struct mxt_data *mxt)
 	int i;
 	u16 chkpress = 0;
 	u8 touch_message_flag = 0;
+	char touch_counter_log[100];
 
 	input = mxt->input;
 	status = message[0x01];
@@ -2532,7 +2772,7 @@ static void process_T100_message(u8 *message, struct mxt_data *mxt)
 	}
 
 #if 1
-	if (prev_touch_id >= touch_id || pressed_or_released) {
+	if ((prev_touch_id >= touch_id) || pressed_or_released) {
 		for (i = 0; i < MXT_MAX_NUM_TOUCHES  ; ++i) {
 			if (mtouch_info[i].pressure == -1)
 				continue;
@@ -2545,6 +2785,9 @@ static void process_T100_message(u8 *message, struct mxt_data *mxt)
 				input_mt_slot(mxt->input, i);
 				input_mt_report_slot_state(mxt->input, MT_TOOL_FINGER, false);
 				mtouch_info[i].pressure = -1;
+				sprintf(touch_counter_log, "[cliensoft mxt336s] Release |x:%3d, y:%3d Amd:%3d| No.%d |",
+                                                xpos, ypos,message[MXT_MSG_T9_TCHAMPLITUDE], touch_id);
+				mobis_touch_counter_release(touch_counter_log, touch_id);
 				//printk("[%s] released  :  size - %d / pressure - %d / touch - %d \n", __func__ , mtouch_info[i].size , mtouch_info[i].pressure, i);
 			}
 			else {
@@ -2555,6 +2798,12 @@ static void process_T100_message(u8 *message, struct mxt_data *mxt)
 				input_report_abs(mxt->input, ABS_MT_POSITION_X,	mtouch_info[i].x);
 				input_report_abs(mxt->input, ABS_MT_POSITION_Y,	mtouch_info[i].y);
 				chkpress++;
+				if(!mobis_touch_counter_flag_check(touch_id))
+				{
+					sprintf(touch_counter_log, "[cliensoft mxt336s] Press   |x:%3d, y:%3d Amd:%3d| No.%d |"
+                                                , xpos, ypos,message[MXT_MSG_T9_TCHAMPLITUDE], touch_id);
+					mobis_touch_counter_press(touch_counter_log, touch_id);
+				}
 			}
 			//printk("por X : %d / por Y : %d \n",mtouch_info[i].x, mtouch_info[i].y);
 
@@ -2588,7 +2837,7 @@ static void process_T100_message(u8 *message, struct mxt_data *mxt)
         }
 
         /* detail touch log */
-        if ((debug >= DEBUG_MESSAGES && debug < DEBUG_INT) || (mxt_touch_cnt > 0)) {
+        if (((debug >= DEBUG_MESSAGES) && (debug < DEBUG_INT)) || (mxt_touch_cnt > 0)) {
                 char msg[64] = { 0};
                 char info[64] = { 0};
                 if ((status & MXT_MSGB_T100_SUPPRESS)==MXT_MSGB_T100_SUPPRESS) {
@@ -2670,7 +2919,7 @@ static void process_T15_message(u8 *message, struct mxt_data *mxt)
 			tsp_keyvalue = TOUCH_KEY_NULL;
 		}
 		//tsp_keyvalue = message[MXT_MSG_T15_KEYSTATE];
-		tsp_keyvalue = message[MXT_MSG_T15_KEYSTATE] | message[MXT_MSG_T15_KEYSTATE + 1] << 8;
+		tsp_keyvalue = message[MXT_MSG_T15_KEYSTATE] | (message[MXT_MSG_T15_KEYSTATE + 1] << 8);
 		tsp_keycode = mxt_tsp_get_keycode(tsp_keyvalue);
 
 		pressed = 1;
@@ -2910,6 +3159,10 @@ static void process_t6_message(u8 *message, struct mxt_data *mxt)
 cfgerr:
 		dev_err(&client->dev, "[TSP] maXTouch "
 				"configuration error\n");
+		/* 2021-11-11 Delete config setting
+		   config data was removed and doesn't write
+		   because sometimes serdes i2c error occur */
+#if 0
 		mxt_prerun_reset(mxt, false);
 		/* 2012_0510 : ATMEL */
 		/*  - keep the below flow */
@@ -2924,6 +3177,7 @@ cfgerr:
 			msleep(MXT_SW_RESET_TIME);
 
 		mxt_postrun_reset(mxt, false);
+#endif
 	}
 	/**
 	* @ legolamp@cleinsoft
@@ -3048,9 +3302,9 @@ int process_message(u8 *message, u8 object, struct mxt_data *mxt)
 			mxt_debug_msg(mxt, "[TSP] Receiving one-touch gesture msg\n");
 
 			event = message[MXT_MSG_T24_STATUS] & 0x0F;
-			xpos = message[MXT_MSG_T24_XPOSMSB] * 16 +
+			xpos = (message[MXT_MSG_T24_XPOSMSB] * 16) +
 				   ((message[MXT_MSG_T24_XYPOSLSB] >> 4) & 0x0F);
-			ypos = message[MXT_MSG_T24_YPOSMSB] * 16 +
+			ypos = (message[MXT_MSG_T24_YPOSMSB] * 16) +
 				   ((message[MXT_MSG_T24_XYPOSLSB] >> 0) & 0x0F);
 			xpos >>= 2;
 			ypos >>= 2;
@@ -3166,7 +3420,8 @@ int process_message(u8 *message, u8 object, struct mxt_data *mxt)
 					 "[TSP] maXTouch: Unknown message! %d\n", object);
 
 #if 1//defined(HDMI_1920_720_12_3)
-			UNKNOWN_MES++;
+			if(UNKNOWN_MES < 5)
+				UNKNOWN_MES++;
 
 			if(UNKNOWN_MES == 5) {
 				LCD_DES_RESET_NEED = 1;
@@ -3234,11 +3489,9 @@ static void mxt_threaded_irq_handler(struct mxt_data *mxt)
 			 * - but, recommend to use message_length
 			 * - if want to reduce the size,
 			 *    see MESSAGEPROCESSOR_T5 and MULTITOUCHSCREEN_T9 */
-			mutex_lock(&mxt->serdes.lock);
 			error = mxt_read_no_delay_block(client,
 											message_addr,
 											message_length, message);
-			mutex_unlock(&mxt->serdes.lock);
 			if (error >= 0) {
 				//I2C success
 				//printk("%s message: %c addr: %d length: %d\n", __func__, message, message_addr, message_length);
@@ -3516,7 +3769,8 @@ static ssize_t show_config_info(struct device *dev,
 	client = to_i2c_client(dev);
 	mxt = i2c_get_clientdata(client);
 
-	sscanf(buf, "%d", &object_type);
+	if(sscanf(buf, "%d", &object_type) < 0)
+		return -EINVAL;
 	obj_addr = MXT_BASE_ADDR(object_type);
 	obj_size = MXT_GET_SIZE(object_type);
 	mxt_read_block(client, obj_addr, obj_size, message_buff);
@@ -3525,7 +3779,10 @@ static ssize_t show_config_info(struct device *dev,
 		dev_info(&mxt->client->dev, "T%d_CONFIG [%d]:%d\n",
 				 object_type, i, message_buff[i]);
 
-	return count;
+	if(count < INT_MAX)
+                return count;
+        else
+                return INT_MAX;
 }
 
 /*
@@ -3558,8 +3815,11 @@ static ssize_t set_ap(struct device *dev,
 	ap = (u16) * ((u16 *)buf);
 	i = mxt_write_ap(client, ap);
 	mxt->bytes_to_read_ap = (u16) * (buf + 2);
-	return count;
 
+	if(count < INT_MAX)
+                return count;
+        else
+                return INT_MAX;
 }
 
 static ssize_t show_deltas(struct device *dev,
@@ -3614,7 +3874,7 @@ static ssize_t show_deltas(struct device *dev,
 	}
 
 	while (size > 0) {
-		read_size = size > 128 ? 128 : size;
+		read_size = (size > 128) ? 128 : size;
 		error = mxt_read_block(client,
 							   debug_diagnostics,
 							   read_size,
@@ -3713,8 +3973,8 @@ static int do_show_references(struct mxt_data *mxt)
 				node_value = (read_buf[loop_byte + 1] << 8);
 				node_value += read_buf[loop_byte];
 
-				if ((loop_page == 5) && ( (loop_byte >= 6) && (loop_byte <= 32) )) {
-					if (node_value < TOUCH_MIN_RANGE_X17 || node_value > TOUCH_MAX_RANGE) {
+				if ((loop_page == 5) && ((loop_byte >= 6) && (loop_byte <= 32))) {
+					if ((node_value < TOUCH_MIN_RANGE_X17) || (node_value > TOUCH_MAX_RANGE)) {
 						dev_err(&mxt->client->dev, "[Page(%d+1) - %d byte] FAIL  0x%x, 0x%x - %d \n",
 								loop_page, loop_byte, read_buf[loop_byte], read_buf[loop_byte + 1], node_value);
 						result = MXT_SELF_TEST_SUCCESS;
@@ -3733,7 +3993,7 @@ static int do_show_references(struct mxt_data *mxt)
 							max_diff_value = node_value;
 					}
 
-					if (node_value < TOUCH_MIN_RANGE || node_value > TOUCH_MAX_RANGE) {
+					if ((node_value < TOUCH_MIN_RANGE) || (node_value > TOUCH_MAX_RANGE)) {
 						dev_err(&mxt->client->dev, "[Page(%d+1) - %d byte] FAIL  0x%x, 0x%x - %d \n",
 								loop_page, loop_byte, read_buf[loop_byte], read_buf[loop_byte + 1], node_value);
 						result = MXT_SELF_TEST_SUCCESS;
@@ -3804,6 +4064,8 @@ static ssize_t show_references(struct device *dev, struct device_attribute *attr
 			break;
 		case MXT_SELF_TEST_RETRY:
 			sprintf(buf, "Reference TEST Retry \n");
+			break;
+		default:
 			break;
 	}
 
@@ -3920,7 +4182,11 @@ static ssize_t set_object_info(struct device *dev,
 
 	mxt->objnum_show = state;
 
-	return count;
+	
+	if(count < INT_MAX)
+                return count;
+        else
+                return INT_MAX;
 }
 
 static ssize_t show_ic_error(struct device *dev, struct device_attribute *attr, char *buf)
@@ -4136,8 +4402,10 @@ static ssize_t set_debug(struct device *dev,
 	client = to_i2c_client(dev);
 	mxt = i2c_get_clientdata(client);
 
-	sscanf(buf, "%d", &state);
-	if (state >= DEBUG_NONE	&& state <= DEBUG_INT) {
+	if(sscanf(buf, "%d", &state) < 0)
+		return -EINVAL;
+
+	if ((state >= DEBUG_NONE) && (state <= DEBUG_INT)) {
 		debug = state;
 		pr_info("\tCURRENT DEBUG MODE : %d\n"
 				"\t0:NONE\n" "\t1:INFO\n"
@@ -4146,8 +4414,11 @@ static ssize_t set_debug(struct device *dev,
 	else {
 		return -EINVAL;
 	}
-
-	return count;
+	
+	if(count < INT_MAX)
+                return count;
+        else
+                return INT_MAX;
 }
 
 static ssize_t reset_i2c(struct device *dev,
@@ -4166,7 +4437,8 @@ static ssize_t reset_i2c(struct device *dev,
                                 "\t0:POWER_OFF\n" "\t1:POWER_ON\n"
                                 "\t2:MON_STOP\n" "\t3:MON_START\n");
 
-        sscanf(buf, "%d", &state);
+        if(sscanf(buf, "%d", &state) < 0)
+		return -EINVAL;
 
 	if(state == 0)
 	{
@@ -4225,7 +4497,10 @@ static ssize_t reset_i2c(struct device *dev,
 		dev_info(&mxt->client->dev, "%s - Start touch_ic_timer\n", __func__);
 	}
 
-        return count;
+	if(count < INT_MAX)
+                return count;
+        else
+                return INT_MAX;
 }
 
 
@@ -4285,9 +4560,10 @@ static ssize_t set_test(struct device *dev,
 	client = to_i2c_client(dev);
 	mxt = i2c_get_clientdata(client);
 
-	sscanf(buf, "%d", &state);
+	if(sscanf(buf, "%d", &state) < 0)
+		return -EINVAL;
 
-	if (state >= 1 && state <= 2)
+	if ((state >= 1) && (state <= 2))
 		mxt_prerun_reset(mxt, true);
 
 	if (state == 0) {
@@ -4332,7 +4608,7 @@ static ssize_t set_test(struct device *dev,
 	}
 	else if (state == 8) {
 		/* auto-cal disable */
-		_disable_auto_cal(mxt, false);
+		disable_auto_cal(mxt, false);
 		mxt->check_auto_cal_flag = AUTO_CAL_DISABLE;
 	}
 	else if (state == 9) {
@@ -4361,10 +4637,13 @@ static ssize_t set_test(struct device *dev,
 		return -EINVAL;
 	}
 
-	if (state >= 1 && state <= 2)
+	if ((state >= 1) && (state <= 2))
 		mxt_postrun_reset(mxt, true);
 
-	return count;
+	if(count < INT_MAX)
+                return count;
+        else
+                return INT_MAX;
 }
 
 #ifdef MXT_FIRMUP_ENABLE
@@ -4395,8 +4674,8 @@ static ssize_t store_firmware(struct device *dev,
 	char path[DAUDIO_PATH_LEN] = {0};
 	struct mxt_data *mxt = dev_get_drvdata(dev);
 
-	if (sscanf(buf, "%d:%s", &state, path) != 2 ||
-			(state < MXT_UP_CMD_BEGIN || state >= MXT_UP_CMD_END)) {
+	if ((sscanf(buf, "%d:%s", &state, path) != 2) ||
+			((state < MXT_UP_CMD_BEGIN) || (state >= MXT_UP_CMD_END))) {
 		dev_err(dev, "[TSP] Invalid argument : %s\n"
 				"Usage : echo cmd:fw_path > /xxx/02_firmware_up\n"
 				"cmd : 1 - firmware update using the firmware class (fixed location : /etc/firmware/mxt336s.fw\n"
@@ -4405,12 +4684,15 @@ static ssize_t store_firmware(struct device *dev,
 		return -EINVAL;
 	}
 
-	if (state == MXT_UP_AUTO || state == MXT_UP_CHECK_AND_AUTO) {
+	if ((state == MXT_UP_AUTO) || (state == MXT_UP_CHECK_AND_AUTO)) {
 		if (state == MXT_UP_CHECK_AND_AUTO) {
 			/* test the chip status */
 			if (MXT_FIRM_STABLE(mxt->firm_status_data)) {
 				dev_info(dev, "[TSP] the firmware is stable\n");
-				return count;
+				if(count < INT_MAX)
+		        	        return count;
+			        else
+			                return INT_MAX;
 			}
 
 			/* test whether firmware is out of order */
@@ -4432,7 +4714,10 @@ static ssize_t store_firmware(struct device *dev,
 	if (ret < 0)
 		count = ret;
 
-	return count;
+	if(count < INT_MAX)
+                return count;
+        else
+                return INT_MAX;
 }
 #endif
 
@@ -4452,11 +4737,15 @@ static void reg_update_dwork(struct work_struct *work)
 	mxt = container_of(work, struct mxt_data, reg_update.dwork.work);
 
 	mutex_lock(&mxt->reg_update.lock);
-	if (mxt->reg_update.flag != _MXT_REGUP_NOOP) {
+	if (mxt->reg_update.flag != MXT_REGUP_NOOP) {
 		del_timer(&mxt->reg_update.tmr);
-		mxt->reg_update.flag = _MXT_REGUP_NOOP;
+		mxt->reg_update.flag = MXT_REGUP_NOOP;
 
-		enable_irq(mxt->client->irq);
+		if(!mxt->irq_enabled)
+	        {
+	                enable_irq(mxt->client->irq);
+	                mxt->irq_enabled = true;
+	        }
 		wake_unlock(&mxt->wakelock);
 	}
 	mutex_unlock(&mxt->reg_update.lock);
@@ -4491,7 +4780,7 @@ static ssize_t store_registers(struct device *dev,
 {
 	struct mxt_data *mxt = dev_get_drvdata(dev);
 
-#define _CHECK_UPDATE_FLAG(flag_, err)					\
+#define CHECK_UPDATE_FLAG(flag_, err)					\
 	do {								\
 		if (mxt->reg_update.flag != flag_) {			\
 			count = 0;					\
@@ -4508,7 +4797,7 @@ static ssize_t store_registers(struct device *dev,
 	mutex_lock(&mxt->reg_update.lock);
 	if (!strncmp(buf, "[BEGIN]", strlen("[BEGIN]"))) {
 		int len;
-		_CHECK_UPDATE_FLAG(_MXT_REGUP_NOOP, "[TSP] alerady running\n");
+		CHECK_UPDATE_FLAG(MXT_REGUP_NOOP, "[TSP] alerady running\n");
 		dev_info(dev, "[TSP] start the reigter update\n");
 		len = strlen("[BEGIN]");
 		/* "[BEGIN]V" means verbose */
@@ -4516,7 +4805,7 @@ static ssize_t store_registers(struct device *dev,
 			mxt->reg_update.verbose = 1;
 		else
 			mxt->reg_update.verbose = 0;
-		mxt->reg_update.flag = _MXT_REGUP_RUNNING;
+		mxt->reg_update.flag = MXT_REGUP_RUNNING;
 
 		mxt_get_version(mxt, &prev_ver);
 
@@ -4534,12 +4823,16 @@ static ssize_t store_registers(struct device *dev,
 		mxt_supp_ops_stop(mxt);
 
 		wake_lock(&mxt->wakelock);
-		disable_irq(mxt->client->irq);
+		if(mxt->irq_enabled)
+	        {
+	                disable_irq(mxt->client->irq);
+	                mxt->irq_enabled = false;
+	        }
 	}
 	else if (!strncmp(buf, "[END]", strlen("[END]"))) {
-		_CHECK_UPDATE_FLAG(_MXT_REGUP_RUNNING,
+		CHECK_UPDATE_FLAG(MXT_REGUP_RUNNING,
 						   "[TSP] Now, no-running stats\n");
-		mxt->reg_update.flag = _MXT_REGUP_NOOP;
+		mxt->reg_update.flag = MXT_REGUP_NOOP;
 		del_timer(&mxt->reg_update.tmr);
 		dev_info(dev, "[TSP] end the reigter update\n");
 
@@ -4548,11 +4841,16 @@ static ssize_t store_registers(struct device *dev,
 		if (!try_sw_reset_chip(mxt, RESET_TO_NORMAL))
 			msleep(MXT_SW_RESET_TIME);
 
-		enable_irq(mxt->client->irq);
+		if(!mxt->irq_enabled)
+	        {
+	                enable_irq(mxt->client->irq);
+	                mxt->irq_enabled = true;
+	        }
+
 		wake_unlock(&mxt->wakelock);
 	}
 	else {
-		_CHECK_UPDATE_FLAG(_MXT_REGUP_RUNNING, "[TSP] please, start\n");
+		CHECK_UPDATE_FLAG(MXT_REGUP_RUNNING, "[TSP] please, start\n");
 		if (0 != mxt_load_registers(mxt, buf, count)) {
 			count = 0;
 			dev_err(dev, "[TSP] failed to update registers\n");
@@ -4561,7 +4859,10 @@ static ssize_t store_registers(struct device *dev,
 
 store_registers_err0:
 	mutex_unlock(&mxt->reg_update.lock);
-	return count;
+	if(count < INT_MAX)
+                return count;
+        else
+                return INT_MAX;
 }
 
 #ifdef MXT_FIRMUP_ENABLE
@@ -4594,8 +4895,12 @@ static int set_mxt_auto_update_exe(struct mxt_data *mxt, int cmd, int state, cha
 	}
 	if (cmd & MXT_FIRMUP_FLOW_UNLOCK) {
 
-		if ((cmd & MXT_FIRMUP_FLOW_UPGRADE) && ret < 0) {
-			enable_irq(client->irq);
+		if ((cmd & MXT_FIRMUP_FLOW_UPGRADE) && (ret < 0)) {
+			if(!mxt->irq_enabled)
+		        {
+	        	        enable_irq(mxt->client->irq);
+		                mxt->irq_enabled = true;
+		        }
 			wake_unlock(&mxt->wakelock);
 			return ret;
 		}
@@ -4636,7 +4941,11 @@ static int set_mxt_auto_update_exe(struct mxt_data *mxt, int cmd, int state, cha
 			mxt_write_init_registers(mxt);
 		}
 
-		enable_irq(client->irq);
+		if(!mxt->irq_enabled)
+	        {
+	                enable_irq(mxt->client->irq);
+	                mxt->irq_enabled = true;
+	        }
 		wake_unlock(&mxt->wakelock);
 	}
 
@@ -4807,7 +5116,10 @@ static ssize_t show_object(struct device *dev,
 	}
 	* */
 
-	return count;
+	if(count < INT_MAX)
+                return count;
+        else
+                return INT_MAX;
 }
 
 static ssize_t store_object(struct device *dev,
@@ -4859,7 +5171,10 @@ static ssize_t store_object(struct device *dev,
 		}
 	}
 
-	return count;
+	if(count < INT_MAX)
+                return count;
+        else
+                return INT_MAX;
 }
 
 static ssize_t show_update_result(struct device *dev, struct device_attribute *attr, char *buf)
@@ -4884,20 +5199,25 @@ static ssize_t store_update(struct device *dev, struct device_attribute *attr, c
 
 	printk("%s [Start]\n",__func__);
 
-	sscanf(buf, "%d", &state);
+	if(sscanf(buf, "%d", &state) < 0)
+		return -EINVAL;
 
 	mxt_serdes_reset_dwork_stop(mxt);
+        mutex_lock(&mxt->serdes.lock);
+        if(mxt->irq_enabled)
+        {
+                disable_irq(mxt->client->irq);
+                mxt->irq_enabled = false;
+        }
 
-	disable_irq(mxt->client->irq);
-
-	if(state == 1 || state == 3)
+	if((state == 1) || (state == 3))
 	{
 		FW_UPDATE_RESULT = 1;
 
 		mxt_write_init_registers(mxt);
 
         }
-	else if(state == 2 || state == 4)
+	else if((state == 2) || (state == 4))
         {
                 FW_UPDATE_RESULT = 1;
 
@@ -4909,11 +5229,66 @@ static ssize_t store_update(struct device *dev, struct device_attribute *attr, c
 
 	FW_UPDATE_RESULT = 0;
 
-	enable_irq(mxt->client->irq);
+	if(!mxt->irq_enabled)
+        {
+                enable_irq(mxt->client->irq);
+                mxt->irq_enabled = true;
+        }
+        mutex_unlock(&mxt->serdes.lock);
+        mxt_serdes_reset_dwork_start(mxt);
 
-	mxt_serdes_reset_dwork_start(mxt);
+	if(count < INT_MAX)
+                return count;
+        else
+                return INT_MAX;
+}
 
-	return count;
+static ssize_t show_mute_on(struct device *dev, struct device_attribute *attr, char *buf)
+{
+        struct i2c_client *client = to_i2c_client(dev);
+        struct mxt_data *mxt = i2c_get_clientdata(client);
+
+	u8 buf1[3];
+        unsigned short addr;
+
+        printk("%s [Start]\n",__func__);
+
+        addr = mxt->client->addr;
+        mxt->client->addr = 0x48;
+        buf1[0] = 0x02;
+        buf1[1] = 0x21;
+        buf1[2] = 0x90;
+
+        i2c_master_send(mxt->client, buf1, 3);
+
+        dev_info(&mxt->client->dev, "%s - CE pin by I2C : 0\n", __func__);
+
+        mxt->client->addr = addr;
+        return 0;
+}
+
+static ssize_t show_mute_off(struct device *dev, struct device_attribute *attr, char *buf)
+{
+        struct i2c_client *client = to_i2c_client(dev);
+        struct mxt_data *mxt = i2c_get_clientdata(client);
+
+	u8 buf1[3];
+        unsigned short addr;
+
+        printk("%s [Start]\n",__func__);
+
+        addr = mxt->client->addr;
+        mxt->client->addr = 0x48;
+        buf1[0] = 0x02;
+        buf1[1] = 0x21;
+        buf1[2] = 0x80;
+
+        i2c_master_send(mxt->client, buf1, 3);
+
+        dev_info(&mxt->client->dev, "%s - CE pin by I2C : 0\n", __func__);
+
+        mxt->client->addr = addr;
+        return 0;
 }
 
 static ssize_t show_power_off(struct device *dev, struct device_attribute *attr, char *buf)
@@ -4929,16 +5304,16 @@ static ssize_t show_power_off(struct device *dev, struct device_attribute *attr,
 	gpio_direction_output(RESET_GPIO, 0);
 	if(!get_montype())
 	{
-		u8 buf[3];
+		u8 buf1[3];
 	        unsigned short addr;
 
 	        addr = mxt->client->addr;
 	        mxt->client->addr = 0x48;
-	        buf[0] = 0x02;
-	        buf[1] = 0x1E;
-	        buf[2] = 0x80;
+	        buf1[0] = 0x02;
+	        buf1[1] = 0x1E;
+	        buf1[2] = 0x80;
 
-	        i2c_master_send(mxt->client, buf, 3);
+	        i2c_master_send(mxt->client, buf1, 3);
 
 	        dev_info(&mxt->client->dev, "%s - CE pin by I2C : 0\n", __func__);
 
@@ -4960,16 +5335,16 @@ static ssize_t show_power_on(struct device *dev, struct device_attribute *attr, 
         gpio_direction_output(RESET_GPIO, 0);
         if(!get_montype())
         {
-                u8 buf[3];
+                u8 buf1[3];
                 unsigned short addr;
 
                 addr = mxt->client->addr;
                 mxt->client->addr = 0x48;
-                buf[0] = 0x02;
-                buf[1] = 0x1E;
-                buf[2] = 0x90;
+                buf1[0] = 0x02;
+                buf1[1] = 0x1E;
+                buf1[2] = 0x90;
 
-                i2c_master_send(mxt->client, buf, 3);
+                i2c_master_send(mxt->client, buf1, 3);
 
                 dev_info(&mxt->client->dev, "%s - CE pin by I2C : 0\n", __func__);
 
@@ -4987,11 +5362,19 @@ static ssize_t show_read_register(struct device *dev, struct device_attribute *a
         u8 buf2[3];
         unsigned short addr;
 
+	mxt_serdes_reset_dwork_stop(mxt);
         mutex_lock(&mxt->serdes.lock);
+        if(mxt->irq_enabled)
+        {
+                disable_irq(mxt->client->irq);
+                mxt->irq_enabled = false;
+        }
 
         addr = client->addr;
 
         printk("-----------%s\n", __func__);
+
+	serdes_video_signal_check(client, 0);
 
         client->addr = serdes_line_fault_config[0][0];
         buf1[0] = (serdes_line_fault_config[0][1] >> 8) & 0xff;
@@ -5002,7 +5385,7 @@ static ssize_t show_read_register(struct device *dev, struct device_attribute *a
 
         mdelay(20);
 
-        for(i = 0; i < 9 ;i++) {
+        for(i = 0; i < 6 ;i++) {
 
                 client->addr = serdes_read[i][0];
                 buf1[0] = (serdes_read[i][1] >> 8) & 0xff;
@@ -5012,7 +5395,7 @@ static ssize_t show_read_register(struct device *dev, struct device_attribute *a
                 if(client->addr != DES_DELAY)
                 {
                         ret = i2c_master_send(client, buf1, 2);
-                        ret = i2c_master_recv(client, buf2, 3);
+                        ret = i2c_master_recv(client, buf2, 1);
                 }
                 printk(" 0x%04X write:0x%02X read:0x%02X\n",serdes_read[i][1], serdes_read[i][2], buf2[0]);
         }
@@ -5031,19 +5414,50 @@ static ssize_t show_read_register(struct device *dev, struct device_attribute *a
         buf1[1] = serdes_line_fault_config[2][1] & 0xff;
 
         ret = i2c_master_send(client, buf1, 2);
-        ret = i2c_master_recv(client, buf2, 3);
+        ret = i2c_master_recv(client, buf2, 1);
 
-	printk("%s err 0x%x\n",__func__, buf2[0]);
+	printk("%s err 0x%02x\n",__func__, buf2[0]);
 
         printk("-----------%s Success\n", __func__);
-out_i2c:
+
         client->addr = addr;
 
+	if(!mxt->irq_enabled)
+        {
+                enable_irq(mxt->client->irq);
+                mxt->irq_enabled = true;
+        }
         mutex_unlock(&mxt->serdes.lock);
+        mxt_serdes_reset_dwork_start(mxt);
 
-        return ;
+        return 0;
 }
 
+static ssize_t set_des_bitrate_change(struct device *dev, struct device_attribute *attr, char *buf)
+{
+        struct i2c_client *client = to_i2c_client(dev);
+        struct mxt_data *mxt = i2c_get_clientdata(client);
+
+        mxt_serdes_reset_dwork_stop(mxt);
+        mutex_lock(&mxt->serdes.lock);
+        if(mxt->irq_enabled)
+        {
+                disable_irq(mxt->client->irq);
+                mxt->irq_enabled = false;
+        }
+
+	des_i2c_bitrate_3gbps_to_6gbps(client);
+
+        if(!mxt->irq_enabled)
+        {
+                enable_irq(mxt->client->irq);
+                mxt->irq_enabled = true;
+        }
+        mutex_unlock(&mxt->serdes.lock);
+        mxt_serdes_reset_dwork_start(mxt);
+
+        return 0;
+}
 
 static ssize_t show_serdes_setting(struct device *dev, struct device_attribute *attr, char *buf)
 {
@@ -5054,23 +5468,41 @@ static ssize_t show_serdes_setting(struct device *dev, struct device_attribute *
         u8 buf2[3];
         unsigned short addr;
 
-	mutex_lock(&mxt->serdes.lock);
+	mxt_serdes_reset_dwork_stop(mxt);
+        mutex_lock(&mxt->serdes.lock);
+        if(mxt->irq_enabled)
+        {
+                disable_irq(mxt->client->irq);
+                mxt->irq_enabled = false;
+        }
 
 	serdes_i2c_show(client);
 
+	if(!mxt->irq_enabled)
+        {
+                enable_irq(mxt->client->irq);
+                mxt->irq_enabled = true;
+        }
         mutex_unlock(&mxt->serdes.lock);
+        mxt_serdes_reset_dwork_start(mxt);
 
-        return ;
+        return 0;
 }
 
 static ssize_t set_serdes_setting(struct device *dev, struct device_attribute *attr, const char *buf, size_t count)
 {
         struct i2c_client *client = to_i2c_client(dev);
 	struct mxt_data *mxt = i2c_get_clientdata(client);
-        u8 ser_bitrate = 0;
-        u8 des_bitrate = 0;
+        int ser_bitrate = 0;
+        int des_bitrate = 0;
 
+	mxt_serdes_reset_dwork_stop(mxt);
         mutex_lock(&mxt->serdes.lock);
+        if(mxt->irq_enabled)
+        {
+                disable_irq(mxt->client->irq);
+                mxt->irq_enabled = false;
+        }
 
         ser_bitrate = ser_i2c_bitrate_check(client);
         des_bitrate = des_i2c_bitrate_check(client);
@@ -5079,20 +5511,34 @@ static ssize_t set_serdes_setting(struct device *dev, struct device_attribute *a
 
         serdes_i2c_reset(client);
 
+	if(!mxt->irq_enabled)
+        {
+                enable_irq(mxt->client->irq);
+                mxt->irq_enabled = true;
+        }
         mutex_unlock(&mxt->serdes.lock);
+        mxt_serdes_reset_dwork_start(mxt);
 
-        return count;
-
+	if(count < INT_MAX)
+                return count;
+        else
+                return INT_MAX;
 }
 
-static ssize_t _set_serdes_6gbps(struct device *dev, struct device_attribute *attr, const char *buf, size_t count)
+static ssize_t set_serdes_6gbps(struct device *dev, struct device_attribute *attr, const char *buf, size_t count)
 {
         struct i2c_client *client = to_i2c_client(dev);
 	struct mxt_data *mxt = i2c_get_clientdata(client);
-        u8 ser_bitrate = 0;
-        u8 des_bitrate = 0;
+        int ser_bitrate = 0;
+        int des_bitrate = 0;
 
+	mxt_serdes_reset_dwork_stop(mxt);
         mutex_lock(&mxt->serdes.lock);
+	if(mxt->irq_enabled)
+        {
+                disable_irq(mxt->client->irq);
+                mxt->irq_enabled = false;
+        }
 
         ser_bitrate = ser_i2c_bitrate_check(client);
         des_bitrate = des_i2c_bitrate_check(client);
@@ -5107,20 +5553,34 @@ static ssize_t _set_serdes_6gbps(struct device *dev, struct device_attribute *at
 
         printk("Now Ser_Bitrate : 0x%x Des_Bitrate : 0x%x\n",ser_bitrate,des_bitrate);
 
+	if(!mxt->irq_enabled)
+        {
+                enable_irq(mxt->client->irq);
+                mxt->irq_enabled = true;
+        }
         mutex_unlock(&mxt->serdes.lock);
+	mxt_serdes_reset_dwork_start(mxt);
 
-        return count;
-
+	if(count < INT_MAX)
+                return count;
+        else
+                return INT_MAX;
 }
 
-static ssize_t _set_serdes_3gbps(struct device *dev, struct device_attribute *attr, const char *buf, size_t count)
+static ssize_t set_serdes_3gbps(struct device *dev, struct device_attribute *attr, const char *buf, size_t count)
 {
         struct i2c_client *client = to_i2c_client(dev);
 	struct mxt_data *mxt = i2c_get_clientdata(client);
-        u8 ser_bitrate = 0;
-        u8 des_bitrate = 0;
+        int ser_bitrate = 0;
+        int des_bitrate = 0;
 
+	mxt_serdes_reset_dwork_stop(mxt);
         mutex_lock(&mxt->serdes.lock);
+	if(mxt->irq_enabled)
+        {
+                disable_irq(mxt->client->irq);
+                mxt->irq_enabled = false;
+        }
 
         ser_bitrate = ser_i2c_bitrate_check(client);
         des_bitrate = des_i2c_bitrate_check(client);
@@ -5135,10 +5595,19 @@ static ssize_t _set_serdes_3gbps(struct device *dev, struct device_attribute *at
 
         printk("Now Ser_Bitrate : 0x%x Des_Bitrate : 0x%x\n",ser_bitrate,des_bitrate);
 
+	if(!mxt->irq_enabled)
+        {
+                enable_irq(mxt->client->irq);
+                mxt->irq_enabled = true;
+        }
         mutex_unlock(&mxt->serdes.lock);
 
-        return count;
+	mxt_serdes_reset_dwork_start(mxt);
 
+	if(count < INT_MAX)
+                return count;
+        else
+                return INT_MAX;
 }
 
 static ssize_t show_recovery_off(struct device *dev, struct device_attribute *attr, char *buf)
@@ -5149,6 +5618,8 @@ static ssize_t show_recovery_off(struct device *dev, struct device_attribute *at
 	printk("%s [Start]\n",__func__);
 
 	mxt_serdes_reset_dwork_stop(mxt);
+
+	return 0;
 }
 
 static ssize_t show_recovery_on(struct device *dev, struct device_attribute *attr, char *buf)
@@ -5159,22 +5630,44 @@ static ssize_t show_recovery_on(struct device *dev, struct device_attribute *att
         printk("%s [Start]\n",__func__);
 
         mxt_serdes_reset_dwork_start(mxt);
+
+	return 0;
 }
 
 static ssize_t set_int_on(struct device *dev, struct device_attribute *attr, char *buf)
 {
         int ret;
         struct i2c_client *client = to_i2c_client(dev);
+	struct mxt_data *mxt = i2c_get_clientdata(client);
 
         printk("%s [Start]\n",__func__);
+
+	if(!mxt->irq_enabled)
+        {
+                enable_irq(mxt->client->irq);
+                mxt->irq_enabled = true;
+		printk("enable irq\n");
+        }
+
+	return 0;
 }
 
 static ssize_t set_int_off(struct device *dev, struct device_attribute *attr, char *buf)
 {
         int ret;
         struct i2c_client *client = to_i2c_client(dev);
+	struct mxt_data *mxt = i2c_get_clientdata(client);
 
         printk("%s [Start]\n",__func__);
+
+	if(mxt->irq_enabled)
+        {
+                disable_irq(mxt->client->irq);
+                mxt->irq_enabled = false;
+		printk("disable irq\n");
+        }
+
+	return 0;
 }
 
 static ssize_t set_lvds_con(struct device *dev, struct device_attribute *attr, const char *buf, size_t count)
@@ -5185,7 +5678,8 @@ static ssize_t set_lvds_con(struct device *dev, struct device_attribute *attr, c
         u8 buf1[3];
         unsigned short addr;
 
-        sscanf(buf, "%d", &state);
+        if(sscanf(buf, "%d", &state) < 0)
+		return -EINVAL;
 
         printk("%s Start %d\n",__func__,state);
 
@@ -5220,7 +5714,10 @@ static ssize_t set_lvds_con(struct device *dev, struct device_attribute *attr, c
 	mutex_unlock(&mxt->serdes.lock);
 	mxt_serdes_reset_dwork_start(mxt);
 
-	return count;
+	if(count < INT_MAX)
+                return count;
+        else
+                return INT_MAX;
 }
 
 static ssize_t show_blu_reg(struct device *dev, struct device_attribute *attr, char *buf)
@@ -5243,27 +5740,27 @@ static ssize_t show_blu_reg(struct device *dev, struct device_attribute *attr, c
 	buf1[1] = 0x06;
 
 	i2c_master_send(client, buf1, 2);
-        i2c_master_recv(client, buf2, 3);
+        i2c_master_recv(client, buf2, 1);
 
-	printk("SER 0x0206 : 0x%x\n",buf2[0]);
+	printk("SER 0x0206 : 0x%02x\n",buf2[0]);
 
 	client->addr = 0x48;
         buf1[0] = 0x02;
         buf1[1] = 0x12;
 
         i2c_master_send(client, buf1, 2);
-        i2c_master_recv(client, buf2, 3);
+        i2c_master_recv(client, buf2, 1);
 
-        printk("DES 0x0212 : 0x%x\n",buf2[0]);
+        printk("DES 0x0212 : 0x%02x\n",buf2[0]);
 
 	client->addr = 0x40;
         buf1[0] = 0x02;
         buf1[1] = 0x15;
 
         i2c_master_send(client, buf1, 2);
-        i2c_master_recv(client, buf2, 3);
+        i2c_master_recv(client, buf2, 1);
 
-        printk("SER 0x0215 : 0x%x\n",buf2[0]);
+        printk("SER 0x0215 : 0x%02x\n",buf2[0]);
 	if((buf2[0]&0x08)==0x08)
 		printk("Micom BLU HIGH\n");
 	else
@@ -5274,9 +5771,9 @@ static ssize_t show_blu_reg(struct device *dev, struct device_attribute *attr, c
         buf1[1] = 0x15;
 
         i2c_master_send(client, buf1, 2);
-        i2c_master_recv(client, buf2, 3);
+        i2c_master_recv(client, buf2, 1);
 
-        printk("DES 0x0215 : 0x%x\n",buf2[0]);
+        printk("DES 0x0215 : 0x%02x\n",buf2[0]);
 
 	if((buf2[0]&0x06)==0x04)
 		printk("DES BLU Default");
@@ -5294,6 +5791,8 @@ static ssize_t show_blu_reg(struct device *dev, struct device_attribute *attr, c
 
 	mutex_unlock(&mxt->serdes.lock);
 	mxt_serdes_reset_dwork_start(mxt);
+
+	return 0;
 }
 
 static ssize_t set_blu_con(struct device *dev, struct device_attribute *attr, const char *buf, size_t count)
@@ -5304,7 +5803,8 @@ static ssize_t set_blu_con(struct device *dev, struct device_attribute *attr, co
         u8 buf1[3];
         unsigned short addr;
 
-        sscanf(buf, "%d", &state);
+        if(sscanf(buf, "%d", &state) < 0)
+		return -EINVAL;
 
         printk("%s Start %d\n",__func__,state);
 
@@ -5361,7 +5861,10 @@ static ssize_t set_blu_con(struct device *dev, struct device_attribute *attr, co
 	mutex_unlock(&mxt->serdes.lock);
 	mxt_serdes_reset_dwork_start(mxt);
 
-	return count;
+	if(count < INT_MAX)
+                return count;
+        else
+                return INT_MAX;
 }
 
 static ssize_t set_touch_log(struct device *dev, struct device_attribute *attr, char *buf)
@@ -5381,6 +5884,11 @@ static ssize_t set_touch_log(struct device *dev, struct device_attribute *attr, 
 
 	mxt_serdes_reset_dwork_stop(mxt);
 	mutex_lock(&mxt->serdes.lock);
+	if(mxt->irq_enabled)
+        {
+                disable_irq(mxt->client->irq);
+                mxt->irq_enabled = false;
+        }
 
 	mxt_get_version(mxt, &nvram_ver);
 
@@ -5388,8 +5896,12 @@ static ssize_t set_touch_log(struct device *dev, struct device_attribute *attr, 
 
         printk("Touch Config Version = %d\n", nvm_version);
 
+	mobis_touch_counter_print();
+
 	if(!get_montype())
 	{
+		mobis_show_need_log_count();
+
 		ser_bitrate = ser_i2c_bitrate_check(client);
 	        des_bitrate = des_i2c_bitrate_check(client);
 
@@ -5420,9 +5932,9 @@ static ssize_t set_touch_log(struct device *dev, struct device_attribute *attr, 
 	        buf1[1] = 0x15;
 
 	        i2c_master_send(client, buf1, 2);
-	        i2c_master_recv(client, buf2, 3);
+	        i2c_master_recv(client, buf2, 1);
 
-	        printk("SER 0x0215 read:0x%x\n",buf2[0]);
+	        printk("SER 0x0215 read:0x%02x\n",buf2[0]);
 	        if((buf2[0]&0x08)==0x08)
 	                printk("Micom BLU HIGH\n");
 	        else
@@ -5433,9 +5945,9 @@ static ssize_t set_touch_log(struct device *dev, struct device_attribute *attr, 
 	        buf1[1] = 0x15;
 
 	        i2c_master_send(client, buf1, 2);
-	        i2c_master_recv(client, buf2, 3);
+	        i2c_master_recv(client, buf2, 1);
 
-	        printk("DES 0x0215 read:0x%x\n",buf2[0]);
+	        printk("DES 0x0215 read:0x%02x\n",buf2[0]);
 
 	        if((buf2[0]&0x06)==0x04)
 	                printk("DES BLU Default");
@@ -5453,9 +5965,12 @@ static ssize_t set_touch_log(struct device *dev, struct device_attribute *attr, 
 
 		printk("\n\n");
 
+		serdes_video_signal_check(client, 0);
+
+		printk("\n");
 
 		addr = client->addr;
-		for(i = 0; i < 9 ;i++) {
+		for(i = 0; i < 6 ;i++) {
 			client->addr = serdes_read[i][0];
 			buf1[0] = (serdes_read[i][1] >> 8) & 0xff;
 			buf1[1] = serdes_read[i][1] & 0xff;
@@ -5464,7 +5979,7 @@ static ssize_t set_touch_log(struct device *dev, struct device_attribute *attr, 
 			if(client->addr != DES_DELAY)
 			{
 				i2c_master_send(client, buf1, 2);
-				i2c_master_recv(client, buf2, 3);
+				i2c_master_recv(client, buf2, 1);
 			}
 
 			if(client->addr == SER_ADDRESS)
@@ -5484,10 +5999,19 @@ static ssize_t set_touch_log(struct device *dev, struct device_attribute *attr, 
 
 	mxt_touch_cnt = 5;
 
+	mobis_touch_counter_reset();
+
 	printk("----------------------------------------------------\n");
 
+	if(!mxt->irq_enabled)
+        {
+                enable_irq(mxt->client->irq);
+                mxt->irq_enabled = true;
+        }
 	mutex_unlock(&mxt->serdes.lock);
 	mxt_serdes_reset_dwork_start(mxt);
+
+	return 0;
 }
 
 static ssize_t show_fw_version(struct device *dev, struct device_attribute *attr, char *buf)
@@ -5500,11 +6024,19 @@ static ssize_t show_fw_version(struct device *dev, struct device_attribute *attr
 
 	mxt_serdes_reset_dwork_stop(mxt);
 
-        disable_irq(mxt->client->irq);
+	if(mxt->irq_enabled)
+        {
+                disable_irq(mxt->client->irq);
+                mxt->irq_enabled = false;
+        }
 
 	mxt_get_version(mxt, &nvram_ver);
 
-	enable_irq(mxt->client->irq);
+	if(!mxt->irq_enabled)
+        {
+                enable_irq(mxt->client->irq);
+                mxt->irq_enabled = true;
+        }
 
         mxt_serdes_reset_dwork_start(mxt);
 
@@ -5516,6 +6048,44 @@ static ssize_t show_fw_version(struct device *dev, struct device_attribute *attr
 							nvram_ver.conf[4],nvram_ver.conf[5],nvram_ver.conf[6],nvram_ver.conf[7]);
 
 	snprintf(buf,255,"%s\n",data);
+
+	return 0;
+}
+
+static ssize_t set_set_test(struct device *dev, struct device_attribute *attr, const char *buf, size_t count)
+{
+        int state;
+        struct i2c_client *client = to_i2c_client(dev);
+        struct mxt_data *mxt = i2c_get_clientdata(client);
+	u8 buf1[3];
+        u8 buf2[3];
+        unsigned short addr;
+
+	printk("%s [Start]\n",__func__);
+
+	if(sscanf(buf, "%d", &state) < 0)
+		return -EINVAL;
+
+        mxt_serdes_reset_dwork_stop(mxt);
+        mutex_lock(&mxt->serdes.lock);
+        if(mxt->irq_enabled)
+        {
+                disable_irq(mxt->client->irq);
+                mxt->irq_enabled = false;
+        }
+
+	if(!mxt->irq_enabled)
+        {
+                enable_irq(mxt->client->irq);
+                mxt->irq_enabled = true;
+        }
+        mutex_unlock(&mxt->serdes.lock);
+        mxt_serdes_reset_dwork_start(mxt);
+
+	if(count < INT_MAX)
+                return count;
+        else
+                return INT_MAX;
 }
 
 static ssize_t show_set_test(struct device *dev, struct device_attribute *attr, char *buf)
@@ -5528,33 +6098,214 @@ static ssize_t show_set_test(struct device *dev, struct device_attribute *attr, 
 
 	mxt_serdes_reset_dwork_stop(mxt);
 
-	disable_irq(mxt->client->irq);
+	if(mxt->irq_enabled)
+        {
+                disable_irq(mxt->client->irq);
+                mxt->irq_enabled = false;
+        }
 
-	mxt_write_init_registers_usb(mxt, true);
+	serdes_i2c_reset(client);
 
-	enable_irq(mxt->client->irq);
+	if(!mxt->irq_enabled)
+        {
+                enable_irq(mxt->client->irq);
+                mxt->irq_enabled = true;
+        }
 
 	mxt_serdes_reset_dwork_start(mxt);
 
+	return 0;
+}
+
+static ssize_t set_adm(struct device *dev, const char *buf, size_t count)
+{
+        int state;
+	struct i2c_client *client = to_i2c_client(dev);
+        struct mxt_data *mxt = i2c_get_clientdata(client);
+        struct input_dev *input = mxt->input;
+        u8 buf1[3];
+        unsigned short addr;
+
+        if(sscanf(buf, "%d", &state) < 0)
+		return -EINVAL;
+
+        printk("%s state %d\n",__func__, state);
+
+	if(get_montype())
+	{
+		if(count < INT_MAX)
+	                return count;
+	        else
+	                return INT_MAX;
+	}
+
+        if (state == 1) {
+                printk("%s Set ADM Mode\n",__func__);
+                mxt_serdes_reset_dwork_stop(mxt);
+
+		if(mxt->irq_enabled)
+	        {
+	                disable_irq(mxt->client->irq);
+	                mxt->irq_enabled = false;
+	        }
+
+		mdelay(10);
+
+                addr = client->addr;
+
+		printk("%s Set Mute off Mode\n",__func__);
+
+                client->addr = 0x48;
+                buf1[0] = 0x02;
+                buf1[1] = 0x21;
+                buf1[2] = 0x80;
+
+                i2c_master_send(client, buf1, 3);
+
+		mdelay(110);
+
+		printk("%s Set LVDS off Mode\n",__func__);
+
+                client->addr = 0x48;
+                buf1[0] = 0x01;
+                buf1[1] = 0xCF;
+                buf1[2] = 0xC7;
+
+                i2c_master_send(client, buf1, 3);
+
+		printk("%s Set TOUCH off Mode\n",__func__);
+
+                client->addr = 0x48;
+                buf1[0] = 0x02;
+                buf1[1] = 0x1E;
+                buf1[2] = 0x80;
+
+                i2c_master_send(client, buf1, 3);
+                client->addr = addr;
+        }
+        else{
+                return -EINVAL;
+        }
+
+	if(count < INT_MAX)
+                return count;
+        else
+                return INT_MAX;
+}
+
+ssize_t mxt_set_adm(struct device *dev, const char *buf, size_t count)
+{
+        return set_adm(dev, buf, count);
+}
+
+static ssize_t show_serdes_log(struct device *dev, struct device_attribute *attr, const char *buf)
+{
+	struct i2c_client *client = to_i2c_client(dev);
+        struct mxt_data *mxt = i2c_get_clientdata(client);
+
+        unsigned short addr;
+        u8 data[255];
+
+        int i;
+        int ret;
+
+        char serdes_log[10];
+        char buffer[4];
+        int sizeofbuffer, sizeofserdes_log;
+        int lock_pin, line_fault;
+        memset(serdes_log, 0x00, sizeof(serdes_log));
+
+	if(get_montype())
+        {
+                printk("%s This function support only departed lcd model which is include Serdes chip\n",__func__);
+                return -EINVAL;
+        }
+
+        printk("%s [Start]\n",__func__);
+
+	mxt_serdes_reset_dwork_stop(mxt);
+        mutex_lock(&mxt->serdes.lock);
+        if(mxt->irq_enabled)
+        {
+                disable_irq(mxt->client->irq);
+                mxt->irq_enabled = false;
+        }
+
+        serdes_log[0] = 0x62;
+        serdes_log[1] = 0xF1;
+        serdes_log[2] = 0x20;
+
+        lock_pin = serdes_i2c_connect(client);
+
+        serdes_video_signal_check(client, lock_pin);
+
+        line_fault = serdes_line_fault_check(client);
+
+	if(serdes_check_value[1] != 0xE1)
+                serdes_log[3] = 0x01;
+
+        if((line_fault == 0x2E) && ((lock_pin&0xfa)!=0xda))
+                serdes_log[4] = 0x01;
+
+        if((lock_pin&0xfa)!=0xda)
+        {
+                serdes_log[5] = 0x01;
+        }
+        else if((serdes_check_value[0] >= 0x20) || (serdes_check_value[4] >= 0x20))
+        {
+                serdes_log[5] = 0x01;
+        }
+
+        mobis_serdes_status_count_read(buffer);
+
+        sizeofbuffer = sizeof(buffer) / sizeof(char);
+        sizeofserdes_log = sizeof(serdes_log) / sizeof(char);
+
+        for(i = 0;i < sizeofbuffer ;i++)
+                serdes_log[sizeofserdes_log - sizeofbuffer + i] = buffer[i];
+
+        for(i = 0; i < sizeofserdes_log ; i++)
+        {
+                printk("Serdes Byte[%d] : %02X\n",i+1,serdes_log[i]);
+        }
+
+        snprintf(data, sizeof(data), "%02X%02X%02X%02X%02X%02X%02X\n", serdes_log[3], serdes_log[4], serdes_log[5], serdes_log[6], serdes_log[7], serdes_log[8], serdes_log[9]);
+
+        ret = snprintf(buf, 255, "%s\n", data);
+
+	mobis_serdes_status_count_reset();
+
+	if(!mxt->irq_enabled)
+        {
+                enable_irq(mxt->client->irq);
+                mxt->irq_enabled = true;
+        }
+        mutex_unlock(&mxt->serdes.lock);
+        mxt_serdes_reset_dwork_start(mxt);
+
+        return ret;
 }
 
 /* Register sysfs files */
 static DEVICE_ATTR(0_device_info, S_IRUGO, show_device_info, NULL);
 #ifdef MXT_FIRMUP_ENABLE
 static DEVICE_ATTR(1_firm_status, S_IRUGO, show_firm_status, NULL);
-static DEVICE_ATTR(2_firmware_up, S_IRUGO | S_IWUGO, show_firmware, store_firmware);
+static DEVICE_ATTR(2_firmware_up, S_IRUGO | S_IWUSR | S_IWGRP, show_firmware, store_firmware);
 #endif
 
-static DEVICE_ATTR(3_config_info,	S_IWUGO, NULL, show_config_info);
+static DEVICE_ATTR(3_config_info,	S_IWUSR | S_IWGRP, NULL, show_config_info);
 static DEVICE_ATTR(4_references,	S_IRUGO, show_references, NULL);
 static DEVICE_ATTR(5_pinfault,		S_IRUGO, show_pin_fault, NULL);
 static DEVICE_ATTR(6_deltas,		S_IRUGO, show_deltas,	 NULL);
 static DEVICE_ATTR(7_stat,			S_IRUGO, show_stat,		 NULL);
-static DEVICE_ATTR(8_debug,			S_IRUGO | S_IWUGO, show_debug, set_debug);
-static DEVICE_ATTR(9_test,			S_IRUGO | S_IWUGO, show_test, set_test);
+static DEVICE_ATTR(8_debug,			S_IRUGO | S_IWUSR | S_IWGRP, show_debug, set_debug);
+static DEVICE_ATTR(9_test,			S_IRUGO | S_IWUSR | S_IWGRP, show_test, set_test);
 static DEVICE_ATTR(10_ic_error,		S_IRUGO, show_ic_error,		 NULL);
-static DEVICE_ATTR(object, S_IRUGO | S_IWUGO, show_object, store_object);
+static DEVICE_ATTR(object, S_IRUGO | S_IWUSR | S_IWGRP, show_object, store_object);
 static DEVICE_ATTR(fw_update, S_IRUGO | S_IWUGO, show_update_result, store_update);
+static DEVICE_ATTR(serdes_setting, S_IRUGO | S_IWUSR | S_IWGRP , show_serdes_setting, set_serdes_setting);
+static DEVICE_ATTR(mute_off,           S_IRUGO, show_mute_off, NULL);
+static DEVICE_ATTR(mute_on,           S_IRUGO, show_mute_on, NULL);
 static DEVICE_ATTR(power_off,           S_IRUGO, show_power_off, NULL);
 static DEVICE_ATTR(power_on,           S_IRUGO, show_power_on, NULL);
 static DEVICE_ATTR(recovery_off,           S_IRUGO, show_recovery_off, NULL);
@@ -5562,14 +6313,16 @@ static DEVICE_ATTR(recovery_on,           S_IRUGO, show_recovery_on, NULL);
 static DEVICE_ATTR(read_register, S_IRUGO, show_read_register, NULL);
 static DEVICE_ATTR(int_on, S_IRUGO, set_int_on, NULL);
 static DEVICE_ATTR(int_off, S_IRUGO, set_int_off, NULL);
-//static DEVICE_ATTR(adm, S_IWUSR|S_IWGRP|S_IWOTH|S_IRUGO ,NULL, _set_adm);
-static DEVICE_ATTR(set_serdes_6gbps, S_IRUGO | S_IWUGO ,NULL, _set_serdes_6gbps);
-static DEVICE_ATTR(set_serdes_3gbps, S_IRUGO | S_IWUGO ,NULL, _set_serdes_3gbps);
-static DEVICE_ATTR(test,           S_IRUGO, show_set_test, NULL);
-static DEVICE_ATTR(lvds_con, S_IRUGO | S_IWUGO ,NULL, set_lvds_con);
-static DEVICE_ATTR(blu_con, S_IRUGO | S_IWUGO ,show_blu_reg, set_blu_con);
+static DEVICE_ATTR(adm, S_IRUGO | S_IWUSR | S_IWGRP ,NULL, set_adm);
+static DEVICE_ATTR(set_serdes_6gbps, S_IRUGO | S_IWUSR | S_IWGRP ,NULL, set_serdes_6gbps);
+static DEVICE_ATTR(set_serdes_3gbps, S_IRUGO | S_IWUSR | S_IWGRP ,NULL, set_serdes_3gbps);
+static DEVICE_ATTR(linklock_disconnect, S_IRUGO, set_des_bitrate_change, NULL);
+static DEVICE_ATTR(test, S_IRUGO | S_IWUSR | S_IWGRP, show_set_test, set_set_test);
+static DEVICE_ATTR(lvds_con, S_IRUGO | S_IWUSR | S_IWGRP ,NULL, set_lvds_con);
+static DEVICE_ATTR(blu_con, S_IRUGO | S_IWUSR | S_IWGRP ,show_blu_reg, set_blu_con);
 static DEVICE_ATTR(touch_log, S_IRUGO, set_touch_log, NULL);
 static DEVICE_ATTR(fw_version, S_IRUGO, show_fw_version, NULL);
+static DEVICE_ATTR(serdes_log, S_IRUGO, show_serdes_log, NULL);
 
 static struct attribute *maxTouch_attributes[] = {
 	&dev_attr_0_device_info.attr,
@@ -5587,6 +6340,9 @@ static struct attribute *maxTouch_attributes[] = {
 	&dev_attr_10_ic_error.attr,
 	&dev_attr_object.attr,
 	&dev_attr_fw_update.attr,
+	&dev_attr_serdes_setting.attr,
+	&dev_attr_mute_off.attr,
+	&dev_attr_mute_on.attr,
 	&dev_attr_power_off.attr,
 	&dev_attr_power_on.attr,
 	&dev_attr_recovery_off.attr,
@@ -5594,14 +6350,16 @@ static struct attribute *maxTouch_attributes[] = {
 	&dev_attr_read_register.attr,
 	&dev_attr_int_off.attr,
         &dev_attr_int_on.attr,
-//	&dev_attr_adm.attr,
+	&dev_attr_adm.attr,
 	&dev_attr_set_serdes_6gbps.attr,
         &dev_attr_set_serdes_3gbps.attr,
+	&dev_attr_linklock_disconnect.attr,
 	&dev_attr_test.attr,
 	&dev_attr_lvds_con.attr,
         &dev_attr_blu_con.attr,
         &dev_attr_touch_log.attr,
 	&dev_attr_fw_version.attr,
+	&dev_attr_serdes_log.attr,
 	NULL,
 };
 
@@ -5648,7 +6406,7 @@ static void mxt_cal_timer_dwork(struct work_struct *work)
 
 	dev_info(&mxt->client->dev,
 			 "%s() cal-timer start !!!\n", __func__);
-	rc = _check_recalibration(mxt);
+	rc = check_recalibration(mxt);
 
 }
 static void mxt_check_touch_ic_timer_dwork(struct work_struct *work)
@@ -5698,7 +6456,7 @@ static void mxt_check_touch_ic_timer_dwork(struct work_struct *work)
 			goto exit;
 		}
 		else {
-			if (buf[0] == MAXTOUCH_FAMILYID||buf[0] == MAXTOUCH_FAMILYID_S) {
+			if ((buf[0] == MAXTOUCH_FAMILYID) || (buf[0] == MAXTOUCH_FAMILYID_S)) {
 				gtouch_ic_reset_cnt = 0;
 
 				/* 2015/08/21, YG_US 분리형 모니터 부팅시 터치 IC 연결 안된 상황 복구 코드*/
@@ -5712,7 +6470,11 @@ static void mxt_check_touch_ic_timer_dwork(struct work_struct *work)
 					LCD_DES_RESET_NEED = 1;
 					mxt_postrun_reset(mxt, true);
 
-					enable_irq(mxt->irq);
+					if(!mxt->irq_enabled)
+				        {
+				                enable_irq(mxt->client->irq);
+			        	        mxt->irq_enabled = true;
+				        }
 				}
 				//printk("%s Touch IC OK !\n", __func__);
 			}
@@ -5902,7 +6664,7 @@ static int check_touch_count(struct mxt_data *mxt, int *touch,
 	addr_t6 = MXT_BASE_ADDR(MXT_GEN_COMMANDPROCESSOR_T6);
 	addr_t37 = MXT_BASE_ADDR(MXT_DEBUG_DIAGNOSTICS_T37);
 	//buff_size = 2 + T9_XSIZE * ((T9_YSIZE + 7) / 8);
-	buff_size = 2 + 32 * ((20 + 7) / 8);	//641T(X:32, Y:20)
+	buff_size = 2 + (32 * ((20 + 7) / 8));	//641T(X:32, Y:20)
 
 	for (i = 0; i < 2; i++) {
 		unsigned char cmd;
@@ -5974,13 +6736,13 @@ static int mxt_wait_touch_flag(struct mxt_data *mxt, uint16_t addr_t37,
 	buff[0] = buff[1] = 0xFF;
 	do {
 		rc = mxt_read_block(mxt->client, addr_t37, 2, buff);
-		if ((buff[0] == 0xF3 && buff[1] == page))
+		if (((buff[0] == 0xF3) && (buff[1] == page)))
 			break;
 		msleep(2);
 	}
 	while (--retry_count && !rc);
 
-	if (retry_count <= 0 || rc) {
+	if ((retry_count <= 0) || rc) {
 		if (retry_count <= 0)
 			rc = -ETIME;
 		dev_err(&client->dev, "%s(), retry_count:%d"
@@ -6005,7 +6767,7 @@ static int mxt_read_touch_flag(struct mxt_data *mxt, uint16_t addr_t37,
 		goto out;
 	}
 
-	if (buff[0] != 0xF3 || buff[1] != page) {
+	if ((buff[0] != 0xF3) || (buff[1] != page)) {
 		dev_err(&client->dev, "%s() buff:0x%02X 0x%02X, page:%d\n",
 				__func__, buff[0], buff[1], page);
 		rc = -EPERM;
@@ -6122,7 +6884,7 @@ static void check_chip_palm(struct mxt_data *mxt)
 		palm_info.facesup_message_flag = 4;
 	}
 
-	if (palm_info.facesup_message_flag == 1 || palm_info.facesup_message_flag == 2) {
+	if ((palm_info.facesup_message_flag == 1) || (palm_info.facesup_message_flag == 2)) {
 		palm_info.palm_check_timer_flag = true;
 		/**
 		* @ legolamp@cleinsoft
@@ -6413,7 +7175,7 @@ static void ts_100ms_tmr_work(struct work_struct *work)
 		/* 2012_0521 :
 		 *  - add the below code : there' is no way to recover if
 		 *   the upper code don't filter the suppression */
-		if (!cal && p100ms_tmr->timer_ticks > 0 &&
+		if (!cal && (p100ms_tmr->timer_ticks > 0) &&
 				(p100ms_tmr->timer_ticks >= p100ms_tmr->timer_limit)) {
 
 			mxt_debug_trace(mxt, "go in suppression wait state\n");
@@ -6513,13 +7275,11 @@ static int mxt336s_initialize(struct i2c_client *client, struct mxt_data *mxt)
 	}
 
 mxt_init_out:
-#if defined(INCLUDE_TOUCH_MXT_1189T)
 	if (error < 0) {
 		printk("[buffalo]Touch driver is reloading...... \n");
 		return MXT_INIT_FIRM_ERR;
 	}
 	else
-#endif
 		return error;
 }
 
@@ -6565,12 +7325,13 @@ retry_i2c:
 
 
 	dev_info(&mxt->client->dev,
-			 "[TSP] Atmel Family ID[0x%X] variant ID[0x%X] major[0x%X] minor[0x%X] build [0x%X]\n",
+			 "[TSP] Atmel Family ID[0x%X] variant ID[0x%X] major[0x%X] minor[0x%X] build[0x%X] num_objs[0x%X]\n",
 			 mxt->device_info.family_id,
 			 mxt->device_info.variant_id,
 			 mxt->device_info.major,
 			 mxt->device_info.minor,
-			 mxt->device_info.build);
+			 mxt->device_info.build,
+			 mxt->device_info.num_objs);
 
 	if (mxt->device_info.family_id == MAXTOUCH_FAMILYID) {
 		printk("%s T family : 0x%X\n",__func__,mxt->device_info.family_id);
@@ -6587,7 +7348,7 @@ retry_i2c:
 		identified = -ENXIO;
 	}
 
-	val = mxt->device_info.major * 10 + mxt->device_info.minor;
+	val = (mxt->device_info.major * 10) + mxt->device_info.minor;
 
 	if (	((mxt->device_info.variant_id == MXT1189T_FIRM_VER1_VARIANTID)) ||
 		((mxt->device_info.variant_id == MXT1189T_FIRM_VER2_VARIANTID))) {
@@ -6770,12 +7531,32 @@ static int mxt_read_object_table(struct i2c_client *client,
 	}
 
 	mxt->report_id_count = report_id_count;
+        dev_info(&mxt->client->dev, "[TSP] report_id_count = %d\n", mxt->report_id_count);
+#if defined(CONFIG_WIDE_PE_COMMON)
+	/* only for NH 641TD departed */
+	if((mxt->device_info.family_id == 0xA4)&&(mxt->device_info.variant_id == 0x36)) {
+		if(report_id_count != 68)
+		{
+			dev_err(&client->dev,
+					"[TSP] Wrong NH 641TD maXTouch report id's [%d]\n",
+					report_id_count);
+			return -ENXIO;
+		}
+	}
+	else if (report_id_count > 254) {    /* 0 & 255 are reserved */
+        	dev_err(&client->dev,
+	                	"[TSP] Too many maXTouch report id's [%d]\n",
+                		report_id_count);
+		return -ENXIO;
+	}
+#else
 	if (report_id_count > 254) {	/* 0 & 255 are reserved */
 		dev_err(&client->dev,
 				"[TSP] Too many maXTouch report id's [%d]\n",
 				report_id_count);
 		return -ENXIO;
 	}
+#endif
 
 	/* Create a mapping from report id to object type */
 	report_id = 1; /* Start from 1, 0 is reserved. */
@@ -6813,13 +7594,14 @@ static int mxt_read_object_table(struct i2c_client *client,
 
 	calculate_infoblock_crc(&crc_calculated, mxt);
 
-	mxt_debug_trace(mxt, "[TSP] Reported info block CRC = 0x%6X\n\n", crc);
-	mxt_debug_trace(mxt, "[TSP] Calculated info block CRC = 0x%6X\n\n",	crc_calculated);
+	dev_info(&mxt->client->dev, "[TSP] Reported info block CRC = 0x%6X\n", crc);
+	dev_info(&mxt->client->dev, "[TSP] Calculated info block CRC = 0x%6X\n", crc_calculated);
 	if (crc == crc_calculated)
 		mxt->info_block_crc = crc;
 	else {
 		mxt->info_block_crc = 0;
 		dev_err(&mxt->client->dev, "[TSP] maXTouch: info block CRC invalid!\n");
+		return -EIO;
 	}
 
 	if (0) {
@@ -6934,8 +7716,8 @@ static void mxt_update_backup_nvram(
 	int error;
 	int old_version = 0, new_version = 0;
 
-	if (old_ver->conf[17] == 'F' &&
-			old_ver->conf[18] == 'A') {
+	if ((old_ver->conf[17] == 'F') &&
+			(old_ver->conf[18] == 'A')) {
 		/* failed to read the configuration version */
 		return;
 	}
@@ -7171,8 +7953,14 @@ static void mxt_early_suspend(struct early_suspend *h)
 		msleep(1000);
 	}
 #endif
-	disable_irq(mxt->client->irq);
+	if(mxt->irq_enabled)
+        {
+                disable_irq(mxt->client->irq);
+                mxt->irq_enabled = false;
+        }
+#ifdef MXT_JIG_DETECT
 	disable_irq(mxt->jig_irq);
+#endif
 #if TS_100S_TIMER_INTERVAL
 	ts_100ms_timer_stop(mxt);
 #endif
@@ -7215,7 +8003,11 @@ static void mxt_late_resume(struct early_suspend *h)
 		mxt336s_resume_reset(mxt->client);
 
 		if( MXT_FIRM_STATUS_FAIL != mxt->firm_status_data ) {
-			enable_irq(mxt->irq);
+			if(!mxt->irq_enabled)
+		        {
+		                enable_irq(mxt->client->irq);
+		                mxt->irq_enabled = true;
+		        }
 		}
 	}
 
@@ -7252,8 +8044,14 @@ static void mxt_late_resume(struct early_suspend *h)
 	if( NULL != mxt->object_table ) {
 		mxt_write_init_registers(mxt);
 	}
-	enable_irq(mxt->client->irq);
+	if(!mxt->irq_enabled)
+        {
+                enable_irq(mxt->client->irq);
+                mxt->irq_enabled = true;
+        }
+#ifdef MXT_JIG_DETECT
 	enable_irq(mxt->jig_irq);
+#endif
 
 	/**
 	* @ legolamp@cleinsoft
@@ -7295,7 +8093,7 @@ static long mxt336S_fops_ioctl(struct file *file,
 	struct atmel_touch_version ver;
 	u16 addr;
 
-	if (NULL == mxt->object_table || check_jig_detection(mxt))
+	if ((NULL == mxt->object_table) || check_jig_detection(mxt))
 		return 0;
 
 	if (_IOC_TYPE(cmd) != DAUDIO_TOUCH_IOC_MAGIC_V1) {
@@ -7336,7 +8134,7 @@ static long mxt336S_fops_ioctl(struct file *file,
 			/* Dong-Ui-Ham(Accept Button) */
 			VPRINTK("[%s] Disable Auto_cal %d\n", __func__, mxt->check_auto_cal_flag);
 			/* auto-cal disable */
-			_disable_auto_cal(mxt, false);
+			disable_auto_cal(mxt, false);
 			mxt->check_auto_cal_flag = AUTO_CAL_DISABLE;
 			break;
 
@@ -7474,7 +8272,7 @@ static struct mxt_platform_data *mxt336s_parse_dt(struct i2c_client *client) {
         pdata->max_x = 1280;
         pdata->max_y = 720;
 
-	if(LCD_VER == DAUDIOKK_LCD_PI_10_25_1920_720_PIO_AUO && !get_oemtype())
+	if((LCD_VER == DAUDIOKK_LCD_PI_10_25_1920_720_PIO_AUO) && !get_oemtype())
         {
 		pdata->max_x = 1919;
 		pdata->max_y = 719;
@@ -7616,7 +8414,7 @@ static int mxt_load_xcfg_file(const char *filename, loff_t *pos, uint32_t nvm_co
 
         fp = file_open(filename, O_RDONLY, 0);
 
-        if ( fp == NULL  || fp == -1 || fp == -2)
+        if ( (fp == NULL)  || (fp == -1) || (fp == -2))
         {
                 printk("Error opening %s: ", filename);
                 printk("[TSP] Cannot open firmware file: %d\n", fp);
@@ -7669,7 +8467,7 @@ static int mxt_load_xcfg_file(const char *filename, loff_t *pos, uint32_t nvm_co
                         ret = vfs_read(fp, c, 1, pos);
                         c1 = c[0] ;
 
-                        if (c1 == ']' || c1 ==0x20)
+                        if ((c1 == ']') || (c1 ==0x20))
                         {
                                 i=50;
                         }
@@ -7725,15 +8523,15 @@ static int mxt_load_xcfg_file(const char *filename, loff_t *pos, uint32_t nvm_co
 					{
 										
 						object[i] = tmp[11+i];
-						if(65 <= object[i] && 70 >= object[i])
+						if((65 <= object[i]) && (70 >= object[i]))
 						{
 							config_crc = config_crc + ((object[i]- 55) * pow);
 						}
-						else if(97 <= object[i] && 102 >= object[i])
+						else if((97 <= object[i]) && (102 >= object[i]))
 						{
 							config_crc = config_crc + ((object[i]- 87) * pow);
 						}
-						else if(48 <= object[i] && 57 >= object[i])
+						else if((48 <= object[i]) && (57 >= object[i]))
 						{
 							config_crc = config_crc + ((object[i]- 48) * pow);
 						}
@@ -7885,7 +8683,7 @@ static int mxt_load_xcfg_file(const char *filename, loff_t *pos, uint32_t nvm_co
 
                 /* Find object type ID number at end of object string */
                 substr = strrchr(object, '_');
-                if (substr == NULL || (*(substr + 1) != 'T')) {
+                if ((substr == NULL) || (*(substr + 1) != 'T')) {
                         printk( "Parse error, could not find T number in %s\n", object);
                         ret = MXT_ERROR_FILE_FORMAT;
                         goto close;
@@ -8059,6 +8857,7 @@ static int mxt336s_probe(struct i2c_client *client,
 	int error;
 	int i;
 	u8 buf[2] = {0, };
+	int ret;
 
 	client->dev.platform_data = dev_get_platdata(&client->dev);
 	if (!client->dev.platform_data) {
@@ -8083,10 +8882,10 @@ static int mxt336s_probe(struct i2c_client *client,
 	client->irq = gpio_to_irq(pdata->irq_gpio);
 
 	error = mxt_read_block(client, MXT_ADDR_INFO_BLOCK, 1, (u8 *)buf);
-	if(buf[0] != MAXTOUCH_FAMILYID&&buf[0] != MAXTOUCH_FAMILYID_S)
+	if((buf[0] != MAXTOUCH_FAMILYID) && (buf[0] != MAXTOUCH_FAMILYID_S))
 	{
 		if(get_oemtype())
-			if(LCD_VER==DAUDIOKK_LCD_OD_08_00_1280_720_OGS_Si_BOE||LCD_VER==DAUDIOKK_LCD_OI_08_00_1280_720_OGS_Si_BOE)
+			if((LCD_VER == DAUDIOKK_LCD_OD_08_00_1280_720_OGS_Si_BOE) || (LCD_VER == DAUDIOKK_LCD_OI_08_00_1280_720_OGS_Si_BOE))
 				client->addr = 0x4b;
 	}
 	
@@ -8095,14 +8894,19 @@ static int mxt336s_probe(struct i2c_client *client,
 
 	init_completion(&pinfault_done);
 	mxt->client = client;
+	mxt->irq_enabled = false;
 	hw_reset_gpio(mxt);
 
 	msleep(103);
 	VPRINTK("[%s] reset high !!!\n", __func__ );
 
+	noti_mxt = mxt;
+
 	/* Allocate structure - we need it to identify device */
 	// mxt->last_read_addr = -1;
+#ifdef MXT_JIG_DETECT
 	mxt->jig_detected = 0;
+#endif
 	input = devm_input_allocate_device(&client->dev);
 	if (!mxt || !input) {
 		dev_err(&client->dev, "[TSP] insufficient memory\n");
@@ -8145,7 +8949,8 @@ static int mxt336s_probe(struct i2c_client *client,
 		dev_info(&client->dev, "[TSP] invalid device or firmware crash!\n");
 		mxt->firm_status_data = MXT_FIRM_STATUS_FAIL;
 		mxt_initialize_device = false;
-		mxt->msg_proc_addr = 0xffff;
+		mxt->msg_proc_addr = 0x0000;
+		mxt->message_size = 1;
 //		goto err_after_get_regulator;
 	}
 #endif
@@ -8196,7 +9001,7 @@ static int mxt336s_probe(struct i2c_client *client,
 	
 //	input->absbit[0] = BIT(ABS_X) | BIT(ABS_Y) | BIT(ABS_PRESSURE);
 #if defined(INCLUDE_LCD_TOUCHKEY)
-	if(LCD_VER == DAUDIOKK_LCD_PI_10_25_1920_720_PIO_AUO && !get_oemtype())
+	if((LCD_VER == DAUDIOKK_LCD_PI_10_25_1920_720_PIO_AUO) && !get_oemtype())
 	{
 		mxt->input_key->evbit[0] = BIT_MASK(EV_SYN) | BIT_MASK(EV_KEY);
 		for (i = 0; tsp_keys[i].id != TOUCH_KEY_NULL; i++) {
@@ -8283,6 +9088,11 @@ static int mxt336s_probe(struct i2c_client *client,
 		if( MXT_FIRM_STATUS_FAIL == mxt->firm_status_data ) {
 			dev_err(&client->dev, "[TSP] MXT FIRM STATUS FAIL; disable_irq.\n");
 			disable_irq(mxt->irq);
+			mxt->irq_enabled = false;
+		}
+		else
+		{
+			mxt->irq_enabled = true;
 		}
 #else
 		mxt->valid_irq_counter = 0;
@@ -8338,6 +9148,12 @@ static int mxt336s_probe(struct i2c_client *client,
 	register_early_suspend(&mxt->early_suspend);
 #endif	/* CONFIG_HAS_EARLYSUSPEND */
 
+	error = register_reboot_notifier(&mxt_reboot_notifier);
+        if(error){
+                pr_err("cannot register reboot notifier (err=%d)\n", ret);
+                goto error_notifier;
+        }
+
 	error = sysfs_create_group(&client->dev.kobj, &maxtouch_attr_group);
 	if (error) {
 		pr_err("[TSP] fail sysfs_create_group\n");
@@ -8377,7 +9193,7 @@ static int mxt336s_probe(struct i2c_client *client,
 	mxt_serdes_reset_dwork_start(mxt);
 
 	VPRINTK("[%s] Disable Auto_cal %d\n", __func__, mxt->check_auto_cal_flag);
-	_disable_auto_cal(mxt, false);
+	disable_auto_cal(mxt, false);
 	mxt->check_auto_cal_flag = AUTO_CAL_DISABLE;
 
 	mxt->cal_check_flag = 1;
@@ -8385,6 +9201,8 @@ static int mxt336s_probe(struct i2c_client *client,
 
 	return 0;
 
+error_notifier:
+	unregister_reboot_notifier(&mxt_reboot_notifier);
 err_after_attr_group:
 	sysfs_remove_group(&client->dev.kobj, &maxtouch_attr_group);
 
@@ -8430,6 +9248,9 @@ static int mxt336s_remove(struct i2c_client *client)
 
 	mxt = i2c_get_clientdata(client);
 	wake_lock_destroy(&mxt->wakelock);
+
+	unregister_reboot_notifier(&mxt_reboot_notifier);
+
 #ifdef CONFIG_HAS_EARLYSUSPEND
 //	wake_lock_destroy(&mxt->wakelock);
 	unregister_early_suspend(&mxt->early_suspend);
@@ -8464,7 +9285,7 @@ static int mxt336s_remove(struct i2c_client *client)
 	/* deregister misc device */
 	misc_deregister(&mxt336S_misc);
 #if defined(INCLUDE_LCD_TOUCHKEY)
-	if(LCD_VER == DAUDIOKK_LCD_PI_10_25_1920_720_PIO_AUO && !get_oemtype())
+	if((LCD_VER == DAUDIOKK_LCD_PI_10_25_1920_720_PIO_AUO) && !get_oemtype())
 	{
 		input_unregister_device(mxt->input_key);
 	}
@@ -8501,7 +9322,11 @@ static int mxt336s_resume_reset(struct i2c_client *client)
 	VPRINTK("[%s]\n", __func__);
 	dev_dbg(&client->dev, "resume multi-touch\n");
 
-	disable_irq(mxt->client->irq);
+	if(mxt->irq_enabled)
+        {
+                disable_irq(mxt->client->irq);
+                mxt->irq_enabled = false;
+        }
 
 	hw_reset_chip(mxt);
 
@@ -8621,7 +9446,7 @@ static struct i2c_driver mxt336s_driver = {
 	.resume		= mxt336s_resume,
 };
 
-#if defined CONFIG_DAUDIO_KK && !defined(CONFIG_TOUCHSCREEN_ONEBIN)
+#if defined (CONFIG_DAUDIO_KK) && !defined(CONFIG_TOUCHSCREEN_ONEBIN)
 static int __init mxt336s_init(void)
 {
 	int err;

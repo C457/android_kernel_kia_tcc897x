@@ -452,6 +452,13 @@ int mmc_of_parse(struct mmc_host *host)
 	if (of_find_property(np, "mmc-hs400-1_2v", &len))
 		host->caps2 |= MMC_CAP2_HS400_1_2V | MMC_CAP2_HS200_1_2V_SDR;
 
+	if (of_property_read_bool(np, "no-sdio"))
+		host->caps2 |= MMC_CAP2_NO_SDIO;
+	if (of_property_read_bool(np, "no-sd"))
+		host->caps2 |= MMC_CAP2_NO_SD;
+	if (of_property_read_bool(np, "no-mmc"))
+		host->caps2 |= MMC_CAP2_NO_MMC;
+
 	host->dsr_req = !of_property_read_u32(np, "dsr", &host->dsr);
 	if (host->dsr_req && (host->dsr & ~0xffff)) {
 		dev_err(host->parent,

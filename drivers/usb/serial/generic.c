@@ -25,12 +25,16 @@
 
 #ifdef CONFIG_USB_SERIAL_GENERIC
 
-#if defined(CONFIG_USB_SERIAL_LGIT_9x28_MODEM)
-static __u16 vendor[2]  = {0x1D74, 0x1D74};
-static __u16 product[2] = {0x3100, 0x3102};
-#else
 static __u16 vendor  = 0x05f9;
 static __u16 product = 0xffff;
+
+#ifdef CONFIG_LGIT_MODEM
+static __u16 lgit_vendor   = 0x1d74;
+static __u16 lgit_product0 = 0x3000;
+static __u16 lgit_product1 = 0x3100;
+static __u16 lgit_product2 = 0x3102;
+static __u16 lgit_product3 = 0x3103;
+static __u16 lgit_product4 = 0x3104;
 #endif
 
 module_param(vendor, ushort, 0);
@@ -39,7 +43,11 @@ MODULE_PARM_DESC(vendor, "User specified USB idVendor");
 module_param(product, ushort, 0);
 MODULE_PARM_DESC(product, "User specified USB idProduct");
 
+#ifdef CONFIG_LGIT_MODEM
+static struct usb_device_id generic_device_ids[7]; /* Initially all zeroes. */
+#else
 static struct usb_device_id generic_device_ids[2]; /* Initially all zeroes. */
+#endif
 
 struct usb_serial_driver usb_serial_generic_device = {
 	.driver = {
@@ -64,20 +72,36 @@ int usb_serial_generic_register(void)
 	int retval = 0;
 
 #ifdef CONFIG_USB_SERIAL_GENERIC
-  #if defined(CONFIG_USB_SERIAL_LGIT_9x28_MODEM)
-	generic_device_ids[0].idVendor = vendor[0];
-	generic_device_ids[0].idProduct = product[0];
-	generic_device_ids[0].match_flags = USB_DEVICE_ID_MATCH_VENDOR | USB_DEVICE_ID_MATCH_PRODUCT;
-
-	generic_device_ids[1].idVendor = vendor[1];
-	generic_device_ids[1].idProduct = product[1];
-	generic_device_ids[1].match_flags = USB_DEVICE_ID_MATCH_VENDOR | USB_DEVICE_ID_MATCH_PRODUCT;
-  #else
 	generic_device_ids[0].idVendor = vendor;
 	generic_device_ids[0].idProduct = product;
 	generic_device_ids[0].match_flags =
 		USB_DEVICE_ID_MATCH_VENDOR | USB_DEVICE_ID_MATCH_PRODUCT;
-  #endif
+#ifdef CONFIG_LGIT_MODEM
+	generic_device_ids[1].idVendor = lgit_vendor;
+	generic_device_ids[1].idProduct = lgit_product0;
+	generic_device_ids[1].match_flags =
+		USB_DEVICE_ID_MATCH_VENDOR | USB_DEVICE_ID_MATCH_PRODUCT;
+
+	generic_device_ids[2].idVendor = lgit_vendor;
+	generic_device_ids[2].idProduct = lgit_product1;
+	generic_device_ids[2].match_flags =
+		USB_DEVICE_ID_MATCH_VENDOR | USB_DEVICE_ID_MATCH_PRODUCT;
+
+	generic_device_ids[3].idVendor = lgit_vendor;
+	generic_device_ids[3].idProduct = lgit_product2;
+	generic_device_ids[3].match_flags =
+		USB_DEVICE_ID_MATCH_VENDOR | USB_DEVICE_ID_MATCH_PRODUCT;
+
+	generic_device_ids[4].idVendor = lgit_vendor;
+	generic_device_ids[4].idProduct = lgit_product3;
+	generic_device_ids[4].match_flags =
+		USB_DEVICE_ID_MATCH_VENDOR | USB_DEVICE_ID_MATCH_PRODUCT;
+
+	generic_device_ids[5].idVendor = lgit_vendor;
+	generic_device_ids[5].idProduct = lgit_product4;
+	generic_device_ids[5].match_flags =
+		USB_DEVICE_ID_MATCH_VENDOR | USB_DEVICE_ID_MATCH_PRODUCT;
+#endif
 
 	retval = usb_serial_register_drivers(serial_drivers,
 			"usbserial_generic", generic_device_ids);

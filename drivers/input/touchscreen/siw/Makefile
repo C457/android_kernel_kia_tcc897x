@@ -7,7 +7,7 @@ BASE_DIR = $(shell pwd)
 
 INSTALL_DIR = ./mod
 
-#CC=arm-eabi-gcc
+CC=arm-eabi-gcc
 #CC=arm-linux-gnueabihf-gcc
 
 ccflags-y += -D__KERNEL__ -DLINUX

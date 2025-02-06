@@ -34,6 +34,7 @@ enum mobis_misc_nvdata_offset {
 	// Please add offset of data that you want to use
 	MOBIS_NVDATA_MISC_RGB_COLOR_TUNE		= 4096,
 	MOBIS_NVDATA_MISC_TOUCH_UPDATE                  = 5120,
+	MOBIS_NVDATA_MISC_SERDES_STATUS                 = 6144,
 
 };
 
@@ -44,9 +45,14 @@ enum mobis_misc_nvdata_offset {
 
 // Offset list (Unit : bytes) - please consider sector size
 enum mobis_settings_nvdata_offset {
-	MOBIS_NVDATA_SETTINGS_RESERVED0 	= 0,
-	MOBIS_NVDATA_SETTINGS_RESERVED1 	= 512,
-	// Please add offset of data that you want to use
+        MOBIS_NVDATA_OFFSET_EM_SETTINGS         = 0,
+        MOBIS_NVDATA_TELEMATICS_VARIANT_OFFSET  = 512,
+        MOBIS_NVDATA_CPU_VARIANT_OFFSET         = 1024,
+        MOBIS_NVDATA_OFFSET_IE_SETTINGS         = 1536,
+        MOBIS_NVDATA_OFFSET_BOOT_ACTIVE_SETTINGS= 2048,
+        MOBIS_NVDATA_OFFSET_ATTEMPT_WRITESKEY   = 2560,
+        MOBIS_NVDATA_OFFSET_MUSIC_STREAMING_FREE_COUNT = 3072,
+        // Please add offset of data that you want to use
 
 };
 

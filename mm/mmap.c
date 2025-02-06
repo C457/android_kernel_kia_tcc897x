@@ -49,6 +49,13 @@
 
 #include "internal.h"
 
+//#define MOBIS_OPEN_READ_TRACE
+#ifdef MOBIS_OPEN_READ_TRACE
+#include "../fs/mount.h"
+#define MOBIS_FILE_PATH 256
+#define MOBIS_MIN_FILE_SIZE 1024
+#endif
+
 #ifndef arch_mmap_check
 #define arch_mmap_check(addr, len, flags)	(0)
 #endif
@@ -1324,6 +1331,34 @@ unsigned long do_mmap_pgoff(struct file *file, unsigned long addr,
 		return -EAGAIN;
 
 	if (file) {
+#ifdef MOBIS_OPEN_READ_TRACE
+	char *p= NULL;
+	char fullpath[MOBIS_FILE_PATH] = {0, };
+	int full_path_len=0;
+	struct mount *r = NULL;
+	memset(fullpath, 0x00, MOBIS_FILE_PATH);
+	r = real_mount(file->f_path.mnt);
+	p = dentry_path_raw(file->f_path.dentry, fullpath, MOBIS_FILE_PATH);
+	full_path_len = strlen(p);
+#if 1
+	if (strstr(r->mnt_mountpoint->d_name.name , "system") != NULL &&len >= MOBIS_MIN_FILE_SIZE)
+	{
+		if (full_path_len > 0 && strstr(p, "/bin/") == NULL )
+			printk("fullpath m =/%s%s,%lu,%lu\n", r->mnt_mountpoint->d_name.name, p, pgoff, len);
+	}
+#else
+	if(full_path_len > 0 && len >= MOBIS_MIN_FILE_SIZE)
+	{
+		if (strstr(p, "/app/") != NULL || strstr(p, "/etc/") != NULL || strstr(p, "/fonts/") != NULL ||
+			strstr(p, "/framework/") != NULL || strstr(p, "/lib/") != NULL || strstr(p, "/media/") != NULL ||
+			strstr(p, "/priv-app/") != NULL || strstr(p, "/usr/") != NULL)
+		{
+			if(strstr(p, ".ko") == NULL)
+				printk("fullpath m =/%s%s,%lu,%lu\n", r->mnt_mountpoint->d_name.name, p, pgoff, len);
+		}
+	}
+#endif
+#endif
 		struct inode *inode = file_inode(file);
 
 		switch (flags & MAP_TYPE) {

@@ -138,7 +138,7 @@ static inline int __fat_get_block(struct inode *inode, sector_t iblock,
 		return 0;
 
 	if (iblock != MSDOS_I(inode)->mmu_private >> sb->s_blocksize_bits) {
-		fat_fs_error(sb, "corrupted file size (i_pos %lld, %lld)",
+		fat_fs_error_ratelimit(sb, "corrupted file size (i_pos %lld, %lld)",
 			MSDOS_I(inode)->i_pos, MSDOS_I(inode)->mmu_private);
 		return -EIO;
 	}
@@ -580,7 +580,7 @@ static void fat_set_state(struct super_block *sb,
 	if (sbi->dirty) {
 		/* warn only on set (mount). */
 		if (set)
-			fat_msg(sb, KERN_WARNING, "Volume was not properly "
+			fat_msg_ratelimit(sb, KERN_WARNING, "Volume was not properly "
 				"unmounted. Some data may be corrupt. "
 				"Please run fsck.");
 		return;
@@ -588,7 +588,7 @@ static void fat_set_state(struct super_block *sb,
 
 	bh = sb_bread(sb, 0);
 	if (bh == NULL) {
-		fat_msg(sb, KERN_ERR, "unable to read boot sector "
+		fat_msg_ratelimit(sb, KERN_ERR, "unable to read boot sector "
 			"to mark fs as dirty");
 		return;
 	}
@@ -759,7 +759,7 @@ retry:
 	fat_get_blknr_offset(sbi, i_pos, &blocknr, &offset);
 	bh = sb_bread(sb, blocknr);
 	if (!bh) {
-		fat_msg(sb, KERN_ERR, "unable to read inode block "
+		fat_msg_ratelimit(sb, KERN_ERR, "unable to read inode block "
 		       "for updating (i_pos %lld)", i_pos);
 		return -EIO;
 	}
@@ -1233,13 +1233,13 @@ static int parse_options(struct super_block *sb, char *options, int is_vfat,
 
 		/* obsolete mount options */
 		case Opt_obsolete:
-			fat_msg(sb, KERN_INFO, "\"%s\" option is obsolete, "
+			fat_msg_ratelimit(sb, KERN_INFO, "\"%s\" option is obsolete, "
 			       "not supported now", p);
 			break;
 		/* unknown option */
 		default:
 			if (!silent) {
-				fat_msg(sb, KERN_ERR,
+				fat_msg_ratelimit(sb, KERN_ERR,
 				       "Unrecognized mount option \"%s\" "
 				       "or missing value", p);
 			}
@@ -1250,7 +1250,7 @@ static int parse_options(struct super_block *sb, char *options, int is_vfat,
 out:
 	/* UTF-8 doesn't provide FAT semantics */
 	if (!strcmp(opts->iocharset, "utf8")) {
-		fat_msg(sb, KERN_WARNING, "utf8 is not a recommended IO charset"
+		fat_msg_ratelimit(sb, KERN_WARNING, "utf8 is not a recommended IO charset"
 		       " for FAT filesystems, filesystem will be "
 		       "case sensitive!");
 	}
@@ -1370,13 +1370,13 @@ static int fat_read_bpb(struct super_block *sb, struct fat_boot_sector *b,
 	/* Validate this looks like a FAT filesystem BPB */
 	if (!bpb->fat_reserved) {
 		if (!silent)
-			fat_msg(sb, KERN_ERR,
+			fat_msg_ratelimit(sb, KERN_ERR,
 				"bogus number of reserved sectors");
 		goto out;
 	}
 	if (!bpb->fat_fats) {
 		if (!silent)
-			fat_msg(sb, KERN_ERR, "bogus number of FAT structure");
+			fat_msg_ratelimit(sb, KERN_ERR, "bogus number of FAT structure");
 		goto out;
 	}
 
@@ -1387,7 +1387,7 @@ static int fat_read_bpb(struct super_block *sb, struct fat_boot_sector *b,
 
 	if (!fat_valid_media(b->media)) {
 		if (!silent)
-			fat_msg(sb, KERN_ERR, "invalid media value (0x%02x)",
+			fat_msg_ratelimit(sb, KERN_ERR, "invalid media value (0x%02x)",
 				(unsigned)b->media);
 		goto out;
 	}
@@ -1396,14 +1396,14 @@ static int fat_read_bpb(struct super_block *sb, struct fat_boot_sector *b,
 	    || (bpb->fat_sector_size < 512)
 	    || (bpb->fat_sector_size > 4096)) {
 		if (!silent)
-			fat_msg(sb, KERN_ERR, "bogus logical sector size %u",
+			fat_msg_ratelimit(sb, KERN_ERR, "bogus logical sector size %u",
 			       (unsigned)bpb->fat_sector_size);
 		goto out;
 	}
 
 	if (!is_power_of_2(bpb->fat_sec_per_clus)) {
 		if (!silent)
-			fat_msg(sb, KERN_ERR, "bogus sectors per cluster %u",
+			fat_msg_ratelimit(sb, KERN_ERR, "bogus sectors per cluster %u",
 				(unsigned)bpb->fat_sec_per_clus);
 		goto out;
 	}
@@ -1430,7 +1430,7 @@ static int fat_read_static_bpb(struct super_block *sb,
 	/* 16-bit DOS 1.x reliably wrote bootstrap short-jmp code */
 	if (b->ignored[0] != 0xeb || b->ignored[2] != 0x90) {
 		if (!silent)
-			fat_msg(sb, KERN_ERR,
+			fat_msg_ratelimit(sb, KERN_ERR,
 				"%s; no bootstrapping code", notdos1x);
 		goto out;
 	}
@@ -1441,7 +1441,7 @@ static int fat_read_static_bpb(struct super_block *sb,
 	 */
 	if (!fat_bpb_is_zero(b)) {
 		if (!silent)
-			fat_msg(sb, KERN_ERR,
+			fat_msg_ratelimit(sb, KERN_ERR,
 				"%s; DOS 2.x BPB is non-zero", notdos1x);
 		goto out;
 	}
@@ -1455,14 +1455,14 @@ static int fat_read_static_bpb(struct super_block *sb,
 
 	if (fdefaults == NULL) {
 		if (!silent)
-			fat_msg(sb, KERN_WARNING,
+			fat_msg_ratelimit(sb, KERN_WARNING,
 				"This looks like a DOS 1.x volume, but isn't a recognized floppy size (%llu sectors)",
 				(u64)bd_sects);
 		goto out;
 	}
 
 	if (!silent)
-		fat_msg(sb, KERN_INFO,
+		fat_msg_ratelimit(sb, KERN_INFO,
 			"This looks like a DOS 1.x volume; assuming default BPB values");
 
 	memset(bpb, 0, sizeof(*bpb));
@@ -1526,7 +1526,7 @@ int fat_fill_super(struct super_block *sb, void *data, int silent, int isvfat,
 	sb_min_blocksize(sb, 512);
 	bh = sb_bread(sb, 0);
 	if (bh == NULL) {
-		fat_msg(sb, KERN_ERR, "unable to read boot sector");
+		fat_msg_ratelimit(sb, KERN_ERR, "unable to read boot sector");
 		goto out_fail;
 	}
 
@@ -1547,7 +1547,7 @@ int fat_fill_super(struct super_block *sb, void *data, int silent, int isvfat,
 
 	error = -EIO;
 	if (logical_sector_size < sb->s_blocksize) {
-		fat_msg(sb, KERN_ERR, "logical sector size too small for device"
+		fat_msg_ratelimit(sb, KERN_ERR, "logical sector size too small for device"
 		       " (logical sector size = %u)", logical_sector_size);
 		goto out_fail;
 	}
@@ -1556,7 +1556,7 @@ int fat_fill_super(struct super_block *sb, void *data, int silent, int isvfat,
 		struct buffer_head *bh_resize;
 
 		if (!sb_set_blocksize(sb, logical_sector_size)) {
-			fat_msg(sb, KERN_ERR, "unable to set blocksize %u",
+			fat_msg_ratelimit(sb, KERN_ERR, "unable to set blocksize %u",
 			       logical_sector_size);
 			goto out_fail;
 		}
@@ -1564,7 +1564,7 @@ int fat_fill_super(struct super_block *sb, void *data, int silent, int isvfat,
 		/* Verify that the larger boot sector is fully readable */
 		bh_resize = sb_bread(sb, 0);
 		if (bh_resize == NULL) {
-			fat_msg(sb, KERN_ERR, "unable to read boot sector"
+			fat_msg_ratelimit(sb, KERN_ERR, "unable to read boot sector"
 			       " (logical sector size = %lu)",
 			       sb->s_blocksize);
 			goto out_fail;
@@ -1601,14 +1601,14 @@ int fat_fill_super(struct super_block *sb, void *data, int silent, int isvfat,
 
 		fsinfo_bh = sb_bread(sb, sbi->fsinfo_sector);
 		if (fsinfo_bh == NULL) {
-			fat_msg(sb, KERN_ERR, "bread failed, FSINFO block"
+			fat_msg_ratelimit(sb, KERN_ERR, "bread failed, FSINFO block"
 			       " (sector = %lu)", sbi->fsinfo_sector);
 			goto out_fail;
 		}
 
 		fsinfo = (struct fat_boot_fsinfo *)fsinfo_bh->b_data;
 		if (!IS_FSINFO(fsinfo)) {
-			fat_msg(sb, KERN_WARNING, "Invalid FSINFO signature: "
+			fat_msg_ratelimit(sb, KERN_WARNING, "Invalid FSINFO signature: "
 			       "0x%08x, 0x%08x (sector = %lu)",
 			       le32_to_cpu(fsinfo->signature1),
 			       le32_to_cpu(fsinfo->signature2),
@@ -1636,7 +1636,7 @@ int fat_fill_super(struct super_block *sb, void *data, int silent, int isvfat,
 	sbi->dir_entries = bpb.fat_dir_entries;
 	if (sbi->dir_entries & (sbi->dir_per_block - 1)) {
 		if (!silent)
-			fat_msg(sb, KERN_ERR, "bogus directory-entries per block"
+			fat_msg_ratelimit(sb, KERN_ERR, "bogus directory-entries per block"
 			       " (%u)", sbi->dir_entries);
 		goto out_invalid;
 	}
@@ -1664,7 +1664,7 @@ int fat_fill_super(struct super_block *sb, void *data, int silent, int isvfat,
 	total_clusters = min(total_clusters, fat_clusters - FAT_START_ENT);
 	if (total_clusters > MAX_FAT(sb)) {
 		if (!silent)
-			fat_msg(sb, KERN_ERR, "count of clusters too big (%u)",
+			fat_msg_ratelimit(sb, KERN_ERR, "count of clusters too big (%u)",
 			       total_clusters);
 		goto out_invalid;
 	}
@@ -1695,7 +1695,7 @@ int fat_fill_super(struct super_block *sb, void *data, int silent, int isvfat,
 	sprintf(buf, "cp%d", sbi->options.codepage);
 	sbi->nls_disk = load_nls(buf);
 	if (!sbi->nls_disk) {
-		fat_msg(sb, KERN_ERR, "codepage %s not found", buf);
+		fat_msg_ratelimit(sb, KERN_ERR, "codepage %s not found", buf);
 		goto out_fail;
 	}
 
@@ -1703,7 +1703,7 @@ int fat_fill_super(struct super_block *sb, void *data, int silent, int isvfat,
 	if (sbi->options.isvfat) {
 		sbi->nls_io = load_nls(sbi->options.iocharset);
 		if (!sbi->nls_io) {
-			fat_msg(sb, KERN_ERR, "IO charset %s not found",
+			fat_msg_ratelimit(sb, KERN_ERR, "IO charset %s not found",
 			       sbi->options.iocharset);
 			goto out_fail;
 		}
@@ -1738,14 +1738,14 @@ int fat_fill_super(struct super_block *sb, void *data, int silent, int isvfat,
 	fat_attach(root_inode, 0);
 	sb->s_root = d_make_root(root_inode);
 	if (!sb->s_root) {
-		fat_msg(sb, KERN_ERR, "get root inode failed");
+		fat_msg_ratelimit(sb, KERN_ERR, "get root inode failed");
 		goto out_fail;
 	}
 
 	if (sbi->options.discard) {
 		struct request_queue *q = bdev_get_queue(sb->s_bdev);
 		if (!blk_queue_discard(q))
-			fat_msg(sb, KERN_WARNING,
+			fat_msg_ratelimit(sb, KERN_WARNING,
 					"mounting with \"discard\" option, but "
 					"the device does not support discard");
 	}
@@ -1756,7 +1756,7 @@ int fat_fill_super(struct super_block *sb, void *data, int silent, int isvfat,
 out_invalid:
 	error = -EINVAL;
 	if (!silent)
-		fat_msg(sb, KERN_INFO, "Can't find a valid FAT filesystem");
+		fat_msg_ratelimit(sb, KERN_INFO, "Can't find a valid FAT filesystem");
 
 out_fail:
 	if (fsinfo_inode)

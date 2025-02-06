@@ -115,7 +115,7 @@ void siw_touch_notify_earjack(u32 type)
 }
 EXPORT_SYMBOL(siw_touch_notify_earjack);
 
-static int _siw_touch_do_notify(struct siw_ts *ts,
+static int siw_touch_do_notify(struct siw_ts *ts,
 				   unsigned long event, void *data)
 {
 //	struct siw_touch_pdata *pdata = ts->pdata;
@@ -234,7 +234,7 @@ int siw_touch_notify(struct siw_ts *ts, unsigned long event, void *data)
 	}
 
 	mutex_lock(&ts->lock);
-	ret = _siw_touch_do_notify(ts, event, data);
+	ret = siw_touch_do_notify(ts, event, data);
 	mutex_unlock(&ts->lock);
 
 	return ret;

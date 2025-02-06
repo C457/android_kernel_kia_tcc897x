@@ -236,7 +236,7 @@ static int uni16_to_x8(struct super_block *sb, unsigned char *ascii,
 	}
 
 	if (unlikely(*ip)) {
-		fat_msg(sb, KERN_WARNING,
+		fat_msg_ratelimit(sb, KERN_WARNING,
 			"filename was truncated while converting.");
 	}
 
@@ -1368,7 +1368,7 @@ int fat_remove_entries(struct inode *dir, struct fat_slot_info *sinfo)
 		 */
 		err = __fat_remove_entries(dir, sinfo->slot_off, nr_slots);
 		if (err) {
-			fat_msg(sb, KERN_WARNING,
+			fat_msg_ratelimit(sb, KERN_WARNING,
 			       "Couldn't remove the long name slots");
 		}
 	}
@@ -1616,7 +1616,7 @@ int fat_add_entries(struct inode *dir, void *slots, int nr_slots,
 		if (sbi->fat_bits != 32)
 			goto error;
 	} else if (MSDOS_I(dir)->i_start == 0) {
-		fat_msg(sb, KERN_ERR, "Corrupted directory (i_pos %lld)",
+		fat_msg_ratelimit(sb, KERN_ERR, "Corrupted directory (i_pos %lld)",
 		       MSDOS_I(dir)->i_pos);
 		err = -EIO;
 		goto error;
@@ -1681,7 +1681,7 @@ found:
 			goto error_remove;
 		}
 		if (dir->i_size & (sbi->cluster_size - 1)) {
-			fat_fs_error(sb, "Odd directory size");
+			fat_fs_error_ratelimit(sb, "Odd directory size");
 			dir->i_size = (dir->i_size + sbi->cluster_size - 1)
 				& ~((loff_t)sbi->cluster_size - 1);
 		}

@@ -4552,7 +4552,11 @@ void sched_show_task(struct task_struct *p)
 	unsigned state;
 
 	state = p->state ? __ffs(p->state) + 1 : 0;
+#ifdef CONFIG_DAUDIO_KK
+	printk(KERN_INFO "%-15.15s pid=%d tgid=%d %c", p->comm, p->pid, p->tgid,
+#else
 	printk(KERN_INFO "%-15.15s %c", p->comm,
+#endif
 		state < sizeof(stat_nam) - 1 ? stat_nam[state] : '?');
 #if BITS_PER_LONG == 32
 	if (state == TASK_RUNNING)
@@ -4603,8 +4607,10 @@ void show_state_filter(unsigned long state_filter)
 
 	touch_all_softlockup_watchdogs();
 
+#ifndef CONFIG_DAUDIO_KK
 #ifdef CONFIG_SCHED_DEBUG
 	sysrq_sched_debug_show();
+#endif
 #endif
 	rcu_read_unlock();
 	/*

@@ -88,6 +88,7 @@ static struct clk	*wdt_clk;
 static u32		wdt_rate;
 static int		watchdog_status;
 static int		tccwdt_reset_time;
+static int		tccwdt_kick_regval;
 
 
 #define DBG(msg...) do { \
@@ -96,17 +97,77 @@ static int		tccwdt_reset_time;
 	} while (0)
 
 #ifdef CONFIG_DAUDIO_KK
-#define TCCWDT_RESET_TIME	30 // sec unit
+#define TCCWDT_RESET_TIME	10 // sec unit
 #else
 #define TCCWDT_RESET_TIME	40 // sec unit
 #endif
+#define TCCWDT_KICK_TIME	1  // sec unit
 #define TCCWDT_CNT_MASK_UNIT	(wdt_rate/65536)
 #ifdef KERNEL_FILE_INTERFACE_USED
 #define TCCWDT_KICK_TIME_DIV	4
 #endif
 
+static void tccwdt_start(void);
+static void tccwdt_stop(void);
+
+#ifdef CONFIG_DAUDIO_KK
+static int tcc_wdt_status=0;
+static ssize_t tcc_wdt_status_show(struct kobject *kobj, struct kobj_attribute *attr,
+			char *buf)
+{
+	int ret = 0;
+	if (wdt_timer_res.dev == NULL)
+	{
+		printk("func=%s, tcc_wdt is not initialized\n", __func__);
+		return ret;
+	}
+	ret = sprintf(buf, "%d", tcc_wdt_status);
+	printk("func=%s, tcc_wdt_status value=%d\n", __func__, tcc_wdt_status);
+	return ret;
+}
+
+static ssize_t tcc_wdt_status_store(struct kobject *kobj, struct kobj_attribute *attr,
+			 const char *buf, size_t count)
+{
+	int value = 0;
+	if (wdt_timer_res.dev == NULL)
+	{
+		printk("func=%s, tcc_wdt is not initialized\n", __func__);
+		return count;
+	}
+	sscanf(buf, "%d", &value);
+	value = !!value;
+	if (value == 1 && tcc_wdt_status == 0)
+	{
+		tccwdt_stop();
+		tccwdt_start();
+		printk("func=%s, tcc_wdt_status value=%d\n", __func__, tcc_wdt_status);
+	}
+	else if (value == 0&& tcc_wdt_status == 1)
+	{
+		tccwdt_stop();
+		printk("func=%s, tcc_wdt_status value=%d\n", __func__, tcc_wdt_status);
+	}
+	return count;
+}
+
+static struct kobj_attribute tcc_wdt_status_attribute =
+	__ATTR(tcc_wdt_status, 0644, tcc_wdt_status_show, tcc_wdt_status_store);
+
+
+static struct attribute *tcc_wdt_fs_attrs[] = {
+	&tcc_wdt_status_attribute.attr,
+	NULL
+};
+
+static struct attribute_group tcc_wdt_fs_attr_group = {
+	.attrs = tcc_wdt_fs_attrs
+};
+#endif
+
 static void tccwdt_start(void)
 {
+	volatile unsigned int wtd_kick_pulse;
 	volatile unsigned int wtd_kick_time;
 #ifndef KERNEL_FILE_INTERFACE_USED
 	volatile unsigned int twd_cfg_value;
@@ -121,36 +182,28 @@ static void tccwdt_start(void)
 #ifdef KERNEL_FILE_INTERFACE_USED
 	wtd_kick_time = tccwdt_reset_time/TCCWDT_KICK_TIME_DIV
 #else
-#ifdef CONFIG_DAUDIO_KK
-	twdcfg_value = 5;
-	wtd_kick_time = 65536/(timer_rate/TWDCFG_TCLKSET_5);
-#else
-	for (twdcfg_value = 6; twdcfg_value>=4 ; twdcfg_value--) {
-		switch (twdcfg_value) {
-			case 4:
-				wtd_kick_time = 65536/(timer_rate/TWDCFG_TCLKSET_4);
-				break;
-			case 5:
-				wtd_kick_time = 65536/(timer_rate/TWDCFG_TCLKSET_5);
-				break;
-			case 6:
-				wtd_kick_time = 65536/(timer_rate/TWDCFG_TCLKSET_6);
-				break;
-			default:
-				BUG();
-		}
-		if (tccwdt_reset_time > wtd_kick_time)
-			break;
+	if ((TCCWDT_KICK_TIME > 22) || (TCCWDT_KICK_TIME <= 0)) {
+		BUG(); // Maximum kick time: 22 sec
+	} else if ((TCCWDT_KICK_TIME > 5) && (TCCWDT_KICK_TIME <= 22)) {
+		twdcfg_value = 6; 
+		wtd_kick_pulse = timer_rate/TWDCFG_TCLKSET_6;
+	} else {
+		twdcfg_value = 5; 
+		wtd_kick_pulse = timer_rate/TWDCFG_TCLKSET_5;
 	}
-#endif
-	wdt_writel(0,wdt_timer_base+TWDCLR);
+
+	tccwdt_kick_regval = 65536 - (TCCWDT_KICK_TIME * wtd_kick_pulse);
 	twd_cfg_value = wdt_readl(wdt_timer_base+TWDCFG)&(~TWDCFG_TCLKSEL_MASK);
 	wdt_writel(twd_cfg_value|(twdcfg_value<<TWDCFG_TCLKSEL_SHIFT)|(TWDCFG_EN|TWDCFG_IEN),
 		wdt_timer_base+TWDCFG);
+	wdt_writel(tccwdt_kick_regval, wdt_timer_base+TWDCNT);
 #endif
 	DBG("%s : watchdog_time=%dsec, kick_time=%dsec\n", __func__,
 		tccwdt_reset_time, wtd_kick_time);
 
+#ifdef CONFIG_DAUDIO_KK
+	tcc_wdt_status= 1;
+#endif
 	spin_unlock(&wdt_lock);
 }
 
@@ -159,13 +212,16 @@ static void tccwdt_stop(void)
 	spin_lock(&wdt_lock);
 
 #ifndef KERNEL_FILE_INTERFACE_USED
+	wdt_writel(tccwdt_kick_regval, wdt_timer_base+TWDCNT);
 	wdt_writel(wdt_readl(wdt_timer_base+TWDCFG)&(~(TWDCFG_EN|TWDCFG_IEN)),
 		wdt_timer_base+TWDCFG);
-	wdt_writel(0,wdt_timer_base+TWDCLR);
 #endif
 	wdt_writel(wdt_readl(wdt_ctrl_base)&(~WDT_EN), wdt_ctrl_base);	/* disable watchdog */
 	DBG("%s\n", __func__);
 
+#ifdef CONFIG_DAUDIO_KK
+	tcc_wdt_status= 0;
+#endif
 	spin_unlock(&wdt_lock);
 }
 
@@ -255,8 +311,7 @@ static irqreturn_t tccwdt_timer_handler(int irq, void *dev_id)
 //		DBG("%s\n", __func__);
 		wdt_writel((1<<(8+wdt_timer_irq_bit))|(1<<wdt_timer_irq_bit), wdt_timer_irq_reg);
 		tccwdt_kickdog();
-		wdt_writel(0, wdt_timer_base+TWDCLR);
-	//	wdt_writel(0, wdt_timer_base+TWDCNT);
+		wdt_writel(tccwdt_kick_regval, wdt_timer_base+TWDCNT);
 		return IRQ_HANDLED;
 	}
 	return IRQ_NONE;
@@ -311,6 +366,13 @@ static int tccwdt_probe(struct platform_device *pdev)
 		pr_warn("%s: Can't read watchdog interrupt offset\n", __func__);
 		BUG();
 	}
+
+#ifdef CONFIG_DAUDIO_KK
+	ret = sysfs_create_group(&pdev->dev.kobj, &tcc_wdt_fs_attr_group);
+	if (ret) {
+		pr_err("unable to register tcc_wdt sysfs nodes\n");
+	}
+#endif
 
 	wdt_timer_res.id = wdt_timer_irq_bit;
 	wdt_timer_res.dev = &pdev->dev;

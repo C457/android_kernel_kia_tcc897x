@@ -164,9 +164,17 @@ struct mali_gp_job *mali_gp_job_create(struct mali_session_data *session, _mali_
 				atomic_set(&dmem_block.num_free_pages, 0);
 
 				if (mali_mem_prepare_mem_for_job(job, &dmem_block)) {
+					static int iShow = 1;
 					MALI_PRINT_ERROR(("Mali GP job: mali_mem_prepare_mem_for_job failed!\n"));
+
+					if(iShow) {
+						dump_stack();
+						show_mem(SHOW_MEM_FILTER_NODES);
+						iShow = 0;
+					}
 					goto fail;
 				}
+
 				if (_MALI_OSK_ERR_OK != mali_mem_defer_bind(job, &dmem_block)) {
 					MALI_PRINT_ERROR(("gp job create, mali_mem_defer_bind failed! GP %x fail!", job));
 					goto fail;

@@ -9,8 +9,8 @@
  * version 2 as published by the Free Software Foundation.
  */
 
-#ifndef __SIW_TOUCH_BUS_H
-#define __SIW_TOUCH_BUS_H
+#ifndef SIW_TOUCH_BUS_H
+#define SIW_TOUCH_BUS_H
 
 #include <linux/kernel.h>
 #include <linux/types.h>
@@ -48,12 +48,12 @@ enum {
 	SPI_BUS_RX_DUMMY_FLAG_128BIT = 0x10,
 };
 
-#define __CLOCK_1KHZ		1000
-#define __CLOCK_100KHZ		(100 * __CLOCK_1KHZ)
-#define __CLOCK_1MHZ		(__CLOCK_1KHZ * __CLOCK_1KHZ)
+#define CLOCK_1KHZ		1000
+#define CLOCK_100KHZ		(100 * CLOCK_1KHZ)
+#define CLOCK_1MHZ		(CLOCK_1KHZ * CLOCK_1KHZ)
 
-#define SPI_MAX_FREQ		(20 * __CLOCK_1MHZ)
-#define SPI_MIN_FREQ		(1 * __CLOCK_1MHZ)
+#define SPI_MAX_FREQ		(20 * CLOCK_1MHZ)
+#define SPI_MIN_FREQ		(1 * CLOCK_1MHZ)
 
 static inline int spi_freq_out_of_range(u32 freq)
 {
@@ -62,17 +62,17 @@ static inline int spi_freq_out_of_range(u32 freq)
 
 static inline u32 freq_to_mhz_unit(u32 freq)
 {
-	return (freq / __CLOCK_1MHZ);
+	return (freq / CLOCK_1MHZ);
 }
 
 static inline u32 freq_to_khz_unit(u32 freq)
 {
-	return (freq / __CLOCK_1KHZ);
+	return (freq / CLOCK_1KHZ);
 }
 
 static inline u32 freq_to_khz_top(u32 freq)
 {
-	return ((freq % __CLOCK_1MHZ) / __CLOCK_100KHZ);
+	return ((freq % CLOCK_1MHZ) / CLOCK_100KHZ);
 }
 
 /* __SIW_SPI_TYPE_1 */
@@ -136,5 +136,5 @@ extern int siw_touch_bus_pm_suspend(struct device *dev, int freeze);
 extern int siw_touch_bus_pm_resume(struct device *dev, int thaw);
 
 
-#endif	/* __SIW_TOUCH_BUS_H */
+#endif	/* SIW_TOUCH_BUS_H */
 

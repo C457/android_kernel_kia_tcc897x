@@ -9,8 +9,8 @@
  * version 2 as published by the Free Software Foundation.
  */
 
-#ifndef __SIW_TOUCH_SYS_H
-#define __SIW_TOUCH_SYS_H
+#ifndef SIW_TOUCH_SYS_H
+#define SIW_TOUCH_SYS_H
 
 extern int siw_touch_sys_bus_use_dma(struct device *dev);
 
@@ -27,5 +27,5 @@ extern int siw_touch_sys_set_panel_bl(struct device *dev, int level);
 
 extern int siw_touch_sys_osc(struct device *dev, int onoff);
 
-#endif	/* __SIW_TOUCH_SYS_H */
+#endif	/* SIW_TOUCH_SYS_H */
 

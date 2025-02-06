@@ -48,7 +48,7 @@ obj-$(CONFIG_AUTO_HOTPLUG)      += auto_hotplug.o
 obj-$(CONFIG_ION_TCC)           += tcc897x-ion.o
 
 obj-$(CONFIG_SNAPSHOT_BOOT)     += snapshot_asm.o snapshot_pm.o
-ifneq ($(CONFIG_ISDB), y)
+ifneq ($(INCLUDE_ISDB), y)
 obj-y   += daudio_sabre_tuner.o
 endif
 obj-y  += daudio_fm1688.o

@@ -381,7 +381,7 @@ int siw_touch_i2c_add_driver(void *data)
 	i2c_drv = &bus_drv->bus.i2c_drv;
 	i2c_drv->driver.name = drv_name;
 	i2c_drv->driver.owner = pdata->owner;
-#if defined(__SIW_CONFIG_OF)
+#if defined(SIW_CONFIG_OF)
 	i2c_drv->driver.of_match_table = pdata->of_match_table;
 #endif
 	i2c_drv->driver.pm = DEV_PM_OPS;

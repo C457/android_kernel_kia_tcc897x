@@ -65,7 +65,7 @@ extern void thaw_flush_kernel_threads(void);
 #if defined(CONFIG_ANDROID)
 /*		QB UN-Mount List - ext4		*/
 #if defined(CONFIG_DAUDIO_KK)
-#if defined(CONFIG_PIO_WIDE_64GB_PARTITION)
+#if defined(PIO_WIDE_64GB_PARTITION)
 static char *qb_um_list[] = {
 	"/data/tombstones",
 	"/data/system/dropbox",
@@ -77,7 +77,7 @@ static char *qb_um_list[] = {
 	"/storage/log",
 	"/oem_data"
 };
-#elif defined(CONFIG_PIO_WIDE_128GB_PARTITION)
+#elif defined(PIO_WIDE_128GB_PARTITION)
 static char *qb_um_list[] = {
 	"/data/tombstones",
 	"/data/system/dropbox",
@@ -89,7 +89,7 @@ static char *qb_um_list[] = {
 	"/storage/log",
 	"/oem_data"
 };
-#elif defined(CONFIG_PIO_WIDE_4GB_PARTITION)
+#elif defined(PIO_WIDE_4GB_PARTITION)
 static char *qb_um_list[] = {
 	"/data/tombstones",
 	"/data/system/dropbox",
@@ -100,7 +100,7 @@ static char *qb_um_list[] = {
 	"/oem_data",
 	"/storage/log",
 };
-#elif defined(CONFIG_PIO_WIDE_8GB_PARTITION)
+#elif defined(PIO_WIDE_8GB_PARTITION)
 static char *qb_um_list[] = {
 	"/data/tombstones",
 	"/data/system/dropbox",
@@ -111,7 +111,7 @@ static char *qb_um_list[] = {
 	"/oem_data",
 	"/storage/log",
 };
-#elif defined(CONFIG_PIO_WIDE_8GB_PARTITION2)
+#elif defined(PIO_WIDE_8GB_PARTITION2)
 static char *qb_um_list[] = {
 	"/data/tombstones",
 	"/data/system/dropbox",
@@ -135,7 +135,7 @@ static char *qb_um_list[] = {
 	"/storage/vr",
 	"/storage/log",
 };
-#endif //CONFIG_PIO_WIDE_64GB_PARTITION
+#endif //PIO_WIDE_64GB_PARTITION
 #else
 static char *qb_um_list[] = {
 	"/data",

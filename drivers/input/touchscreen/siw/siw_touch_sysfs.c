@@ -116,7 +116,7 @@ static void siw_touch_sysfs_del_symlink(struct siw_ts *ts, char *name)
 }
 
 
-static ssize_t _show_do_plat_data(struct device *dev, char *buf)
+static ssize_t show_do_plat_data(struct device *dev, char *buf)
 {
 	struct siw_ts *ts = to_touch_core(dev);
 	struct touch_device_caps *caps = &ts->caps;
@@ -175,19 +175,19 @@ static ssize_t _show_do_plat_data(struct device *dev, char *buf)
 	return size;
 }
 
-static ssize_t _show_plat_data(struct device *dev, char *buf)
+static ssize_t show_plat_data(struct device *dev, char *buf)
 {
 	struct siw_ts *ts = to_touch_core(dev);
 	int size = 0;
 
 	mutex_lock(&ts->lock);
-	size = _show_do_plat_data(dev, buf);
+	size = show_do_plat_data(dev, buf);
 	mutex_unlock(&ts->lock);
 
 	return size;
 }
 
-static ssize_t _show_do_driver_data(struct device *dev, char *buf)
+static ssize_t show_do_driver_data(struct device *dev, char *buf)
 {
 //	struct siw_ts *ts = to_touch_core(dev);
 	int size = 0;
@@ -200,19 +200,19 @@ static ssize_t _show_do_driver_data(struct device *dev, char *buf)
 	return size;
 }
 
-static ssize_t _show_driver_data(struct device *dev, char *buf)
+static ssize_t show_driver_data(struct device *dev, char *buf)
 {
 	struct siw_ts *ts = to_touch_core(dev);
 	int size = 0;
 
 	mutex_lock(&ts->lock);
-	size = _show_do_driver_data(dev, buf);
+	size = show_do_driver_data(dev, buf);
 	mutex_unlock(&ts->lock);
 
 	return size;
 }
 
-static ssize_t _show_update_result(struct device *dev, char *buf)
+static ssize_t show_update_result(struct device *dev, char *buf)
 {
 	int ret;
         struct siw_ts *ts = to_touch_core(dev);
@@ -224,17 +224,18 @@ static ssize_t _show_update_result(struct device *dev, char *buf)
         return ret;
 }
 
-static ssize_t _store_update(struct device *dev,
+static ssize_t store_update(struct device *dev,
                                 const char *buf, size_t count)
 {
         struct siw_ts *ts = to_touch_core(dev);
 	int state;
 
-	sscanf(buf, "%d", &state);
+	if(sscanf(buf, "%d", &state) < 0)
+		return -EINVAL;
 
 	t_dev_info(dev, "%s [Start] %d\n",__func__, state);
 
-	if(state == 1 || state == 3)
+	if((state == 1) || (state == 3))
 	{
 		t_dev_info(dev, "System F/W upgrade with %s\n", ts->test_fwpath);
 
@@ -243,24 +244,36 @@ static ssize_t _store_update(struct device *dev,
 		if(state == 3)
 			ts->force_fwup |= FORCE_FWUP_SYS_STORE;
 	}
-	else if(state == 2 || state == 4)
+	else if((state == 2) || (state == 4))
 	{
 		switch(daudio_lcd_inch_check())
 		{
 			case 10 :
 				if(state == 4)
-					sscanf(FW_PATH_EXTERNAL_10_25, "%255s", ts->test_fwpath);
+				{
+					if(sscanf(FW_PATH_EXTERNAL_10_25, "%255s", ts->test_fwpath) < 0)
+						return -EINVAL;
+				}
 				else
-					sscanf(FW_PATH_EXTERNAL_USB_10_25, "%255s", ts->test_fwpath);
+				{
+					if(sscanf(FW_PATH_EXTERNAL_USB_10_25, "%255s", ts->test_fwpath) < 0)
+						return -EINVAL;
+				}
 				break;
 			case 12 :
 				if(state == 4)
-					sscanf(FW_PATH_EXTERNAL_12_3, "%255s", ts->test_fwpath);
+				{
+					if(sscanf(FW_PATH_EXTERNAL_12_3, "%255s", ts->test_fwpath) < 0)
+						return -EINVAL;
+				}
 				else
-					sscanf(FW_PATH_EXTERNAL_USB_12_3, "%255s", ts->test_fwpath);
+				{
+					if(sscanf(FW_PATH_EXTERNAL_USB_12_3, "%255s", ts->test_fwpath) < 0)
+						return -EINVAL;
+				}
 				break;
 			default :
-				return count;
+				return -EINVAL;
 		}
 
 		t_dev_info(dev, "USB F/W upgrade with %s\n", ts->test_fwpath);
@@ -270,24 +283,30 @@ static ssize_t _store_update(struct device *dev,
 	else
 	{
 		t_dev_info(dev, "F/W upgrade end with wrong value %d\n", state);
-		return count;
+		return -EINVAL;
 	}
 
         siw_touch_qd_upgrade_work_now(ts);
 
 	t_dev_info(dev, "%s [Done]\n",__func__);
 
-        return count;
+	if(count < INT_MAX)
+                return count;
+        else
+                return INT_MAX;
 }
 
-static ssize_t _store_upgrade(struct device *dev,
+static ssize_t store_upgrade(struct device *dev,
 				const char *buf, size_t count)
 {
 	struct siw_ts *ts = to_touch_core(dev);
 
 	if (sscanf(buf, "%255s", ts->test_fwpath) <= 0) {
 		siw_sysfs_err_invalid_param(dev);
-		return count;
+		if(count < INT_MAX)
+	                return count;
+	        else
+	                return INT_MAX;
 	}
 
 	t_dev_info(dev, "Manual F/W upgrade with %s\n", ts->test_fwpath);
@@ -296,10 +315,13 @@ static ssize_t _store_upgrade(struct device *dev,
 
 	siw_touch_qd_upgrade_work_now(ts);
 
-	return count;
+	if(count < INT_MAX)
+                return count;
+        else
+                return INT_MAX;
 }
 
-static ssize_t _show_upgrade(struct device *dev, char *buf)
+static ssize_t show_upgrade(struct device *dev, char *buf)
 {
 	struct siw_ts *ts = to_touch_core(dev);
 
@@ -359,17 +381,23 @@ static ssize_t _store_lpwg_data(struct device *dev,
 
 	if (sscanf(buf, "%d", &reply) <= 0) {
 		siw_sysfs_err_invalid_param(dev);
-		return count;
+		if(count < INT_MAX)
+	                return count;
+	        else
+	                return INT_MAX;
 	}
 
 	t_dev_info(dev, "uevent reply %d\n", reply);
 
 	atomic_set(&ts->state.uevent, UEVENT_IDLE);
-#if defined(__SIW_SUPPORT_WAKE_LOCK)
+#if defined(SIW_SUPPORT_WAKE_LOCK)
 	wake_unlock(&ts->lpwg_wake_lock);
 #endif
 
-	return count;
+	if(count < INT_MAX)
+                return count;
+        else
+                return INT_MAX;
 }
 
 static ssize_t _store_lpwg_notify(struct device *dev,
@@ -382,12 +410,20 @@ static ssize_t _store_lpwg_notify(struct device *dev,
 
 	mfts_mode = siw_touch_boot_mode_check(dev);
 	if ((mfts_mode >= MINIOS_MFTS_FOLDER) && !ts->role.mfts_lpwg)
-		return count;
+	{
+		if(count < INT_MAX)
+	                return count;
+	        else
+	                return INT_MAX
+	}
 
 	if (sscanf(buf, "%d %d %d %d %d",
 			&code, &param[0], &param[1], &param[2], &param[3]) <= 0) {
 		siw_sysfs_err_invalid_param(dev);
-		return count;
+		if(count < INT_MAX)
+	                return count;
+	        else
+	                return INT_MAX;
 	}
 
 	/* only below code notify
@@ -426,7 +462,10 @@ static ssize_t _store_lpwg_notify(struct device *dev,
 	mutex_unlock(&ts->lock);
 
 out:
-	return count;
+	if(count < INT_MAX)
+                return count;
+        else
+                return INT_MAX;
 }
 
 static ssize_t _show_mfts_state(struct device *dev, char *buf)
@@ -452,7 +491,10 @@ static ssize_t _store_mfts_state(struct device *dev,
 
 	if (sscanf(buf, "%d", &value) <= 0) {
 		siw_sysfs_err_invalid_param(dev);
-		return count;
+		if(count < INT_MAX)
+	                return count;
+	        else
+	                return INT_MAX;
 	}
 
 	if (value >= MFTS_NONE && value <= MFTS_CURVED) {
@@ -462,7 +504,10 @@ static ssize_t _store_mfts_state(struct device *dev,
 		t_dev_info(dev, "MFTS : Unknown state, %d\n", value);
 	}
 
-	return count;
+	if(count < INT_MAX)
+                return count;
+        else
+                return INT_MAX;
 }
 
 static ssize_t _show_mfts_lpwg(struct device *dev, char *buf)
@@ -484,14 +529,20 @@ static ssize_t _store_mfts_lpwg(struct device *dev,
 
 	if (sscanf(buf, "%d", &value) <= 0) {
 		siw_sysfs_err_invalid_param(dev);
-		return count;
+		if(count < INT_MAX)
+	                return count;
+	        else
+	                return INT_MAX
 	}
 
 	ts->role.mfts_lpwg = value;
 	t_mfts_lpwg = value;
 	t_dev_info(dev, "MFTS LPWG : %d\n", ts->role.mfts_lpwg);
 
-	return count;
+	if(count < INT_MAX)
+                return count;
+        else
+                return INT_MAX;
 }
 #endif	/* __SIW_CONFIG_KNOCK */
 
@@ -518,7 +569,10 @@ static ssize_t _store_lockscreen_state(struct device *dev,
 
 	if (sscanf(buf, "%d", &value) <= 0) {
 		siw_sysfs_err_invalid_param(dev);
-		return count;
+		if(count < INT_MAX)
+	                return count;
+	        else
+	                return INT_MAX
 	}
 
 	if (value == LOCKSCREEN_UNLOCK || value == LOCKSCREEN_LOCK) {
@@ -528,7 +582,10 @@ static ssize_t _store_lockscreen_state(struct device *dev,
 		t_dev_info(dev, "Lock-screen : Unknown state, %d\n", value);
 	}
 
-	return count;
+	if(count < INT_MAX)
+                return count;
+        else
+                return INT_MAX;
 }
 #endif	/* __SYS_USE_LOCKSCREEN */
 
@@ -580,11 +637,14 @@ static ssize_t _store_ime_state(struct device *dev,
 			siw_ime_str[value], value, ret);
 
 out:
-	return count;
+	if(count < INT_MAX)
+                return count;
+        else
+                return INT_MAX;
 }
 #endif	/* __SYS_USE_IME_STATE */
 
-static ssize_t _show_quick_cover_state(struct device *dev, char *buf)
+static ssize_t show_quick_cover_state(struct device *dev, char *buf)
 {
 	struct siw_ts *ts = to_touch_core(dev);
 	int value = 0;
@@ -598,7 +658,7 @@ static ssize_t _show_quick_cover_state(struct device *dev, char *buf)
 	return (ssize_t)size;
 }
 
-static ssize_t _store_quick_cover_state(struct device *dev,
+static ssize_t store_quick_cover_state(struct device *dev,
 				const char *buf, size_t count)
 {
 	int value = 0;
@@ -606,10 +666,13 @@ static ssize_t _store_quick_cover_state(struct device *dev,
 
 	if (sscanf(buf, "%d", &value) <= 0) {
 		siw_sysfs_err_invalid_param(dev);
-		return count;
+		if(count < INT_MAX)
+	                return count;
+	        else
+	                return INT_MAX;
 	}
 
-	if (value == QUICKCOVER_CLOSE || value == QUICKCOVER_OPEN) {
+	if ((value == QUICKCOVER_CLOSE) || (value == QUICKCOVER_OPEN)) {
 		atomic_set(&ts->state.quick_cover, value);
 		t_dev_info(dev, "Qcover : %s(%d)\n",
 			value ? "CLOSE" : "OPEN", value);
@@ -617,20 +680,23 @@ static ssize_t _store_quick_cover_state(struct device *dev,
 		t_dev_info(dev, "Qcover : Unknown state, %d\n", value);
 	}
 
-	return count;
+	if(count < INT_MAX)
+                return count;
+        else
+                return INT_MAX;
 }
 
-static ssize_t _show_version_info(struct device *dev, char *buf)
+static ssize_t show_version_info(struct device *dev, char *buf)
 {
 	return siw_touch_get(dev, CMD_VERSION, buf);
 }
 
-static ssize_t _show_atcmd_version_info(struct device *dev, char *buf)
+static ssize_t show_atcmd_version_info(struct device *dev, char *buf)
 {
 	return siw_touch_get(dev, CMD_ATCMD_VERSION, buf);
 }
 
-static ssize_t _show_sp_link_touch_off(struct device *dev, char *buf)
+static ssize_t show_sp_link_touch_off(struct device *dev, char *buf)
 {
 	struct siw_ts *ts = to_touch_core(dev);
 	int size = 0;
@@ -641,7 +707,7 @@ static ssize_t _show_sp_link_touch_off(struct device *dev, char *buf)
 	return (ssize_t)size;
 }
 
-static ssize_t _store_sp_link_touch_off(struct device *dev,
+static ssize_t store_sp_link_touch_off(struct device *dev,
 				const char *buf, size_t count)
 {
 	struct siw_ts *ts = to_touch_core(dev);
@@ -649,7 +715,10 @@ static ssize_t _store_sp_link_touch_off(struct device *dev,
 
 	if (sscanf(buf, "%d", &value) <= 0) {
 		siw_sysfs_err_invalid_param(dev);
-		return count;
+		if(count < INT_MAX)
+	        	return count;
+		else
+			return INT_MAX;
 	}
 
 	mutex_lock(&ts->lock);
@@ -665,10 +734,13 @@ static ssize_t _store_sp_link_touch_off(struct device *dev,
 
 	mutex_unlock(&ts->lock);
 
-	return count;
+	if(count < INT_MAX)
+                return count;
+        else
+                return INT_MAX;
 }
 
-static ssize_t _show_irq_state(struct device *dev, char *buf)
+static ssize_t show_irq_state(struct device *dev, char *buf)
 {
 	struct siw_touch_chip *chip = to_touch_chip(dev);
 	struct siw_ts *ts = chip->ts;
@@ -682,7 +754,7 @@ static ssize_t _show_irq_state(struct device *dev, char *buf)
 	return size;
 }
 
-static ssize_t _store_irq_state(struct device *dev,
+static ssize_t store_irq_state(struct device *dev,
 				const char *buf, size_t count)
 {
 	struct siw_touch_chip *chip = to_touch_chip(dev);
@@ -691,7 +763,10 @@ static ssize_t _store_irq_state(struct device *dev,
 
 	if (sscanf(buf, "%d", &value) <= 0) {
 		siw_sysfs_err_invalid_param(dev);
-		return count;
+		if(count < INT_MAX)
+			return count;
+	        else
+			return INT_MAX;
 	}
 
 	mutex_lock(&ts->lock);
@@ -704,7 +779,7 @@ static ssize_t _store_irq_state(struct device *dev,
 	return (ssize_t)count;
 }
 
-static ssize_t _show_irq_level(struct device *dev, char *buf)
+static ssize_t show_irq_level(struct device *dev, char *buf)
 {
 	struct siw_touch_chip *chip = to_touch_chip(dev);
 	struct siw_ts *ts = chip->ts;
@@ -719,7 +794,7 @@ static ssize_t _show_irq_level(struct device *dev, char *buf)
 	return size;
 }
 
-static ssize_t _show_debug_tool_state(struct device *dev, char *buf)
+static ssize_t show_debug_tool_state(struct device *dev, char *buf)
 {
 	struct siw_ts *ts = to_touch_core(dev);
 	int value = 0;
@@ -732,7 +807,7 @@ static ssize_t _show_debug_tool_state(struct device *dev, char *buf)
 	return (ssize_t)size;
 }
 
-static ssize_t _store_debug_tool_state(struct device *dev,
+static ssize_t store_debug_tool_state(struct device *dev,
 				const char *buf, size_t count)
 {
 	struct siw_ts *ts = to_touch_core(dev);
@@ -740,13 +815,21 @@ static ssize_t _store_debug_tool_state(struct device *dev,
 
 	if (sscanf(buf, "%d", &data) <= 0) {
 		siw_sysfs_err_invalid_param(dev);
-		return count;
+		if(count < INT_MAX)
+	                return count;
+	        else
+	                return INT_MAX;
 	}
 
 	if (siw_ops_is_null(ts, notify))
-		return count;
+	{
+		if(count < INT_MAX)
+	                return count;
+	        else
+	                return INT_MAX;
+	}
 
-	if (data >= DEBUG_TOOL_DISABLE && data <= DEBUG_TOOL_ENABLE) {
+	if ((data >= DEBUG_TOOL_DISABLE) && (data <= DEBUG_TOOL_ENABLE)) {
 		atomic_set(&ts->state.debug_tool, data);
 		siw_ops_notify(ts, NOTIFY_DEBUG_TOOL, (void *)&data);
 		t_dev_info(dev, "Debug tool state : %s\n",
@@ -756,10 +839,13 @@ static ssize_t _store_debug_tool_state(struct device *dev,
 		t_dev_info(dev, "Debug tool state : Invalid value, %d\n", data);
 	}
 
-	return count;
+	if(count < INT_MAX)
+                return count;
+        else
+                return INT_MAX;
 }
 
-static ssize_t _show_debug_option_state(struct device *dev, char *buf)
+static ssize_t show_debug_option_state(struct device *dev, char *buf)
 {
 #if defined(__SIW_SUPPORT_DEBUG_OPTION)
 	struct siw_ts *ts = to_touch_core(dev);
@@ -776,7 +862,7 @@ static ssize_t _show_debug_option_state(struct device *dev, char *buf)
 #endif
 }
 
-static ssize_t _store_debug_option_state(struct device *dev,
+static ssize_t store_debug_option_state(struct device *dev,
 				const char *buf, size_t count)
 {
 #if defined(__SIW_SUPPORT_DEBUG_OPTION)
@@ -785,7 +871,10 @@ static ssize_t _store_debug_option_state(struct device *dev,
 
 	if (sscanf(buf, "%d", &new_mask) <= 0) {
 		siw_sysfs_err_invalid_param(dev);
-		return count;
+		if(count < INT_MAX)
+	                return count;
+	        else
+	                return INT_MAX;
 	}
 
 	if (new_mask >= DEBUG_OPTION_DISABLE
@@ -797,7 +886,10 @@ static ssize_t _store_debug_option_state(struct device *dev,
 		t_dev_info(dev, "Debug option : Invalid value, %d\n", new_mask);
 	}
 #endif
-	return count;
+	if(count < INT_MAX)
+                return count;
+        else
+                return INT_MAX;
 }
 
 #if defined(__SIW_SUPPORT_ASC)
@@ -825,12 +917,20 @@ static ssize_t _store_incoming_call_state(struct device *dev,
 
 	if (sscanf(buf, "%d", &value) <= 0) {
 		siw_sysfs_err_invalid_param(dev);
-		return count;
+		if(count < INT_MAX)
+	                return count;
+	        else
+	                return INT_MAX;
 	}
 
 	if (value >= INCOMING_CALL_IDLE && value <= INCOMING_CALL_OFFHOOK) {
 		if (atomic_read(&ts->state.incoming_call) == value)
-			return count;
+		{
+			if(count < INT_MAX)
+		                return count;
+		        else
+		                return INT_MAX;
+		}
 
 		atomic_set(&ts->state.incoming_call, value);
 
@@ -846,7 +946,10 @@ static ssize_t _store_incoming_call_state(struct device *dev,
 		t_dev_info(dev, "Incoming-call : Unknown %d\n", value);
 	}
 
-	return count;
+	if(count < INT_MAX)
+                return count;
+        else
+                return INT_MAX;
 }
 
 static ssize_t _show_asc_param(struct device *dev, char *buf)
@@ -881,7 +984,10 @@ static ssize_t _store_asc_param(struct device *dev,
 
 	if (sscanf(buf, "%s %d", string, &value) <= 0) {
 		siw_sysfs_err_invalid_param(dev);
-		return count;
+		if(count < INT_MAX)
+	                return count;
+	        else
+	                return INT_MAX;
 	}
 
 	if (!strcmp(string, "use_asc")) {
@@ -906,7 +1012,10 @@ static ssize_t _store_asc_param(struct device *dev,
 	}
 
 out:
-	return count;
+	if(count < INT_MAX)
+                return count;
+        else
+                return INT_MAX;
 }
 
 static ssize_t _show_onhand(struct device *dev, char *buf)
@@ -932,7 +1041,10 @@ static ssize_t _store_onhand(struct device *dev,
 
 	if (sscanf(buf, "%d", &value) <= 0) {
 		siw_sysfs_err_invalid_param(dev);
-		return count;
+		if(count < INT_MAX)
+	                return count;
+	        else
+	                return INT_MAX;
 	}
 
 	if (value >= IN_HAND_ATTN && value <= IN_HAND_NO_ATTN) {
@@ -946,11 +1058,14 @@ static ssize_t _store_onhand(struct device *dev,
 		t_dev_info(dev, "Hand : Invalid value, %d\n", value);
 	}
 
-	return count;
+	if(count < INT_MAX)
+                return count;
+        else
+                return INT_MAX;
 }
 #endif	/* __SIW_SUPPORT_ASC */
 
-static ssize_t _show_module_info(struct device *dev, char *buf)
+static ssize_t show_module_info(struct device *dev, char *buf)
 {
 	struct siw_ts *ts = to_touch_core(dev);
 	int size = 0;
@@ -967,7 +1082,7 @@ static ssize_t _show_module_info(struct device *dev, char *buf)
 u32 __weak t_mon_dbg_mask;	//instead of using extern
 u32 __weak t_bus_dbg_mask;	//instead of using extern
 
-static ssize_t _show_dbg_mask(struct device *dev, char *buf)
+static ssize_t show_dbg_mask(struct device *dev, char *buf)
 {
 //	struct siw_ts *ts = to_touch_core(dev);
 	int size = 0;
@@ -995,7 +1110,7 @@ static ssize_t _show_dbg_mask(struct device *dev, char *buf)
 	return (ssize_t)size;
 }
 
-static void _store_dbg_mask_usage(struct device *dev)
+static void store_dbg_mask_usage(struct device *dev)
 {
 	t_dev_info(dev, "Usage:\n");
 	t_dev_info(dev, " t_dev_dbg_mask : echo 0 {mask_value(hex)} > dbg_mask\n");
@@ -1004,7 +1119,7 @@ static void _store_dbg_mask_usage(struct device *dev)
 	t_dev_info(dev, " t_bus_dbg_mask : echo 3 {mask_value(hex)} > dbg_mask\n");
 }
 
-static ssize_t _store_dbg_mask(struct device *dev,
+static ssize_t store_dbg_mask(struct device *dev,
 				const char *buf, size_t count)
 {
 	struct siw_ts *ts = to_touch_core(dev);
@@ -1013,8 +1128,11 @@ static ssize_t _store_dbg_mask(struct device *dev,
 
 	if (sscanf(buf, "%d %X", &type, &new_value) <= 0) {
 		siw_sysfs_err_invalid_param(dev);
-		_store_dbg_mask_usage(dev);
-		return count;
+		store_dbg_mask_usage(dev);
+		if(count < INT_MAX)
+	                return count;
+	        else
+	                return INT_MAX;
 	}
 
 	switch (type) {
@@ -1046,14 +1164,16 @@ static ssize_t _store_dbg_mask(struct device *dev,
 			old_value, new_value);
 		break;
 	default :
-		_store_dbg_mask_usage(dev);
+		store_dbg_mask_usage(dev);
 		break;
 	}
-
-	return count;
+	if(count < INT_MAX)
+                return count;
+        else
+                return INT_MAX;
 }
 
-static ssize_t _show_dbg_flag(struct device *dev, char *buf)
+static ssize_t show_dbg_flag(struct device *dev, char *buf)
 {
 //	struct siw_ts *ts = to_touch_core(dev);
 	int size = 0;
@@ -1065,7 +1185,7 @@ static ssize_t _show_dbg_flag(struct device *dev, char *buf)
 	return (ssize_t)size;
 }
 
-static ssize_t _store_dbg_flag(struct device *dev,
+static ssize_t store_dbg_flag(struct device *dev,
 				const char *buf, size_t count)
 {
 //	struct siw_ts *ts = to_touch_core(dev);
@@ -1073,7 +1193,10 @@ static ssize_t _store_dbg_flag(struct device *dev,
 
 	if (sscanf(buf, "%X", &new_value) <= 0) {
 		siw_sysfs_err_invalid_param(dev);
-		return count;
+		if(count < INT_MAX)
+	                return count;
+	        else
+	                return INT_MAX;
 	}
 
 	old_value = t_dbg_flag;
@@ -1081,10 +1204,13 @@ static ssize_t _store_dbg_flag(struct device *dev,
 	t_dev_info(dev, "t_dbg_flag changed : %08Xh -> %08xh\n",
 		old_value, new_value);
 
-	return count;
+	if(count < INT_MAX)
+                return count;
+        else
+                return INT_MAX;
 }
 
-static ssize_t _show_irq_flag(struct device *dev, char *buf)
+static ssize_t show_irq_flag(struct device *dev, char *buf)
 {
 	struct siw_ts *ts = to_touch_core(dev);
 	int size = 0;
@@ -1097,7 +1223,7 @@ static ssize_t _show_irq_flag(struct device *dev, char *buf)
 }
 
 
-static ssize_t _store_irq_flag(struct device *dev,
+static ssize_t store_irq_flag(struct device *dev,
 				const char *buf, size_t count)
 {
 	struct siw_ts *ts = to_touch_core(dev);
@@ -1105,7 +1231,10 @@ static ssize_t _store_irq_flag(struct device *dev,
 
 	if (sscanf(buf, "%X", &new_value) <= 0) {
 		siw_sysfs_err_invalid_param(dev);
-		return count;
+		if(count < INT_MAX)
+	                return count;
+	        else
+	                return INT_MAX;
 	}
 
 	old_value = (u32)ts->irqflags_curr;
@@ -1121,19 +1250,25 @@ static ssize_t _store_irq_flag(struct device *dev,
 	t_dev_info(dev, "irq flag changed : %08Xh -> %08xh\n",
 		old_value, (int)ts->irqflags_curr);
 
-	return count;
+	if(count < INT_MAX)
+                return count;
+        else
+                return INT_MAX;
 }
 
-#if defined(__SIW_SUPPORT_PROBE_POST_RETRY)
-static ssize_t _store_init_late(struct device *dev,
+#if defined(SIW_SUPPORT_PROBE_POST_RETRY)
+static ssize_t store_init_late(struct device *dev,
 				const char *buf, size_t count)
 {
 	t_dev_info(dev, "probe_post retry is working\n");
 
-	return count;
+	if(count < INT_MAX)
+                return count;
+        else
+                return INT_MAX;
 }
-#else	/* __SIW_SUPPORT_PROBE_POST_RETRY */
-static ssize_t _store_init_late(struct device *dev,
+#else	/* SIW_SUPPORT_PROBE_POST_RETRY */
+static ssize_t store_init_late(struct device *dev,
 				const char *buf, size_t count)
 {
 //	struct siw_ts *ts = to_touch_core(dev);
@@ -1141,7 +1276,10 @@ static ssize_t _store_init_late(struct device *dev,
 
 	if (sscanf(buf, "%X", &value) <= 0) {
 		siw_sysfs_err_invalid_param(dev);
-		return count;
+		if(count < INT_MAX)
+	                return count;
+	        else
+	                return INT_MAX;
 	}
 
 	if (value != 0x55AA) {
@@ -1153,13 +1291,16 @@ static ssize_t _store_init_late(struct device *dev,
 		&value);
 
 out:
-	return count;
+	if(count < INT_MAX)
+                return count;
+        else
+                return INT_MAX;
 }
-#endif	/* __SIW_SUPPORT_PROBE_POST_RETRY */
+#endif	/* SIW_SUPPORT_PROBE_POST_RETRY */
 
 extern int siw_touch_notify(struct siw_ts *ts, unsigned long event, void *data);
 
-static ssize_t _store_dbg_notify(struct device *dev,
+static ssize_t store_dbg_notify(struct device *dev,
 				const char *buf, size_t count)
 {
 	struct siw_ts *ts = to_touch_core(dev);
@@ -1170,7 +1311,10 @@ static ssize_t _store_dbg_notify(struct device *dev,
 	if (sscanf(buf, "%X %X %X",
 			&magic, &event, &data) <= 0) {
 		siw_sysfs_err_invalid_param(dev);
-		return count;
+		if(count < INT_MAX)
+	                return count;
+	        else
+	                return INT_MAX;
 	}
 
 	if (magic != 0x5A) {	//magic code
@@ -1181,10 +1325,13 @@ static ssize_t _store_dbg_notify(struct device *dev,
 		(unsigned long)event, (void *)&data);
 
 out:
-	return count;
+	if(count < INT_MAX)
+                return count;
+        else
+                return INT_MAX;
 }
 
-static ssize_t _show_dbg_mon(struct device *dev, char *buf)
+static ssize_t show_dbg_mon(struct device *dev, char *buf)
 {
 	struct siw_ts *ts = to_touch_core(dev);
 	struct siw_ts_thread *ts_thread = &ts->mon_thread;
@@ -1207,7 +1354,7 @@ static ssize_t _show_dbg_mon(struct device *dev, char *buf)
 	return (ssize_t)size;
 }
 
-static ssize_t _store_dbg_mon(struct device *dev,
+static ssize_t store_dbg_mon(struct device *dev,
 				const char *buf, size_t count)
 {
 	struct siw_ts *ts = to_touch_core(dev);
@@ -1216,19 +1363,28 @@ static ssize_t _store_dbg_mon(struct device *dev,
 
 	if (!(touch_flags(ts) & TOUCH_USE_MON_THREAD)) {
 		t_dev_info(dev, "mon thread not enabled\n");
-		return count;
+		if(count < INT_MAX)
+	                return count;
+	        else
+	                return INT_MAX;
 	}
 
 	if (sscanf(buf, "%d", &pause) <= 0) {
 		siw_sysfs_err_invalid_param(dev);
-		return count;
+		if(count < INT_MAX)
+	                return count;
+	        else
+	                return INT_MAX;
 	}
 
 	chip = to_touch_chip(dev);
 
 	if (chip->driving_mode != LCD_MODE_U3) {
 		t_dev_info(dev, "can be controlled only in U3\n");
-		return count;
+		if(count < INT_MAX)
+	                return count;
+	        else
+	                return INT_MAX;
 	}
 
 	if (pause)
@@ -1236,7 +1392,10 @@ static ssize_t _store_dbg_mon(struct device *dev,
 	else
 		siw_touch_mon_resume(dev);
 
-	return count;
+	if(count < INT_MAX)
+                return count;
+        else
+                return INT_MAX;
 }
 
 enum {
@@ -1244,7 +1403,7 @@ enum {
 	SYSFS_DBG_TEST_SYMLINK,
 };
 
-static ssize_t _store_dbg_test(struct device *dev,
+static ssize_t store_dbg_test(struct device *dev,
 				const char *buf, size_t count)
 {
 	struct siw_ts *ts = to_touch_core(dev);
@@ -1256,7 +1415,10 @@ static ssize_t _store_dbg_test(struct device *dev,
 	if (sscanf(buf, "%X %X %X %16s",
 			&magic, &code, &value, name) <= 0) {
 		siw_sysfs_err_invalid_param(dev);
-		return count;
+		if(count < INT_MAX)
+	                return count;
+	        else
+	                return INT_MAX;
 	}
 
 	if (magic != 0x5A) {	//magic code
@@ -1275,10 +1437,13 @@ static ssize_t _store_dbg_test(struct device *dev,
 	}
 
 out:
-	return count;
+	if(count < INT_MAX)
+                return count;
+        else
+                return INT_MAX;
 }
 
-static ssize_t __show_g_state(struct device *dev, char *buf,
+static ssize_t show_g_state(struct device *dev, char *buf,
 					int value, const char *name)
 {
 	int size = 0;
@@ -1289,7 +1454,7 @@ static ssize_t __show_g_state(struct device *dev, char *buf,
 	return (ssize_t)size;
 }
 
-static ssize_t __store_g_state(struct device *dev,
+static ssize_t store_g_state(struct device *dev,
 				const char *buf, size_t count,
 				int *val, const char *name)
 {
@@ -1306,25 +1471,28 @@ static ssize_t __store_g_state(struct device *dev,
 	if (val != NULL)
 		*val = value;
 
-	return count;
+	if(count < INT_MAX)
+                return count;
+        else
+                return INT_MAX;
 }
 
-static ssize_t _show_glove_state(struct device *dev, char *buf)
+static ssize_t show_glove_state(struct device *dev, char *buf)
 {
 	struct siw_ts *ts = to_touch_core(dev);
 	int value = atomic_read(&ts->state.glove);
 
-	return __show_g_state(dev, buf, value, "Glove");
+	return show_g_state(dev, buf, value, "Glove");
 }
 
-static ssize_t _store_glove_state(struct device *dev,
+static ssize_t store_glove_state(struct device *dev,
 				const char *buf, size_t count)
 {
 	struct siw_ts *ts = to_touch_core(dev);
 	int value = 0;
 	int ret = 0;
 
-	ret = __store_g_state(dev, buf, count, &value, "Glove");
+	ret = store_g_state(dev, buf, count, &value, "Glove");
 	if (ret >= 0) {
 		mutex_lock(&ts->lock);
 		atomic_set(&ts->state.glove, value);
@@ -1335,22 +1503,22 @@ static ssize_t _store_glove_state(struct device *dev,
 	return (ssize_t)count;
 }
 
-static ssize_t _show_grab_state(struct device *dev, char *buf)
+static ssize_t show_grab_state(struct device *dev, char *buf)
 {
 	struct siw_ts *ts = to_touch_core(dev);
 	int value = atomic_read(&ts->state.grab);
 
-	return __show_g_state(dev, buf, value, "Grab");
+	return show_g_state(dev, buf, value, "Grab");
 }
 
-static ssize_t _store_grab_state(struct device *dev,
+static ssize_t store_grab_state(struct device *dev,
 				const char *buf, size_t count)
 {
 	struct siw_ts *ts = to_touch_core(dev);
 	int value = 0;
 	int ret = 0;
 
-	ret = __store_g_state(dev, buf, count, &value, "Grab");
+	ret = store_g_state(dev, buf, count, &value, "Grab");
 	if (ret >= 0) {
 		mutex_lock(&ts->lock);
 		atomic_set(&ts->state.grab, value);
@@ -1369,25 +1537,32 @@ ssize_t __weak show_sys_con(struct device *dev, char *buf)
 ssize_t __weak store_sys_con(struct device *dev,
 				const char *buf, size_t count)
 {
-	return count;
+	if(count < INT_MAX)
+                return count;
+        else
+                return INT_MAX;
 }
 
 
 #define SIW_TOUCH_ATTR(_name, _show, _store)	\
 		TOUCH_ATTR(_name, _show, _store)
 
-#define _SIW_TOUCH_ATTR_T(_name)	\
+#define SIW_TOUCH_ATTR_FW_UPDATE(_name, _show, _store) \
+                TOUCH_ATTR_FW_UPDATE(_name, _show, _store)
+
+
+#define SIW_TOUCH_ATTR_T(_name)	\
 		touch_attr_##_name
 
 
 static SIW_TOUCH_ATTR(platform_data,
-						_show_plat_data, NULL);
+						show_plat_data, NULL);
 static SIW_TOUCH_ATTR(driver_data,
-						_show_driver_data, NULL);
+						show_driver_data, NULL);
 static SIW_TOUCH_ATTR(fw_upgrade,
-						_show_upgrade,
-						_store_upgrade);
-static SIW_TOUCH_ATTR(fw_update, _show_update_result, _store_update);
+						show_upgrade,
+						store_upgrade);
+static SIW_TOUCH_ATTR_FW_UPDATE(fw_update, show_update_result, store_update);
 #if defined(__SIW_CONFIG_KNOCK)
 static SIW_TOUCH_ATTR(lpwg_data,
 						_show_lpwg_data,
@@ -1412,33 +1587,33 @@ static SIW_TOUCH_ATTR(ime_status,
 						_store_ime_state);
 #endif	/* __SYS_USE_LOCKSCREEN */
 static SIW_TOUCH_ATTR(quick_cover_status,
-						_show_quick_cover_state,
-						_store_quick_cover_state);
+						show_quick_cover_state,
+						store_quick_cover_state);
 static SIW_TOUCH_ATTR(firmware,
-						_show_version_info, NULL);
+						show_version_info, NULL);
 static SIW_TOUCH_ATTR(version,
-						_show_version_info, NULL);
+						show_version_info, NULL);
 static SIW_TOUCH_ATTR(testmode_ver,
-						_show_atcmd_version_info, NULL);
+						show_atcmd_version_info, NULL);
 static SIW_TOUCH_ATTR(fw_version,
-                                                _show_atcmd_version_info, NULL);
+                                                show_atcmd_version_info, NULL);
 static SIW_TOUCH_ATTR(sp_link_touch_off,
-						_show_sp_link_touch_off,
-						_store_sp_link_touch_off);
+						show_sp_link_touch_off,
+						store_sp_link_touch_off);
 static SIW_TOUCH_ATTR(irq_state,
-						_show_irq_state,
-						_store_irq_state);
+						show_irq_state,
+						store_irq_state);
 static SIW_TOUCH_ATTR(irq_level,
-						_show_irq_level, NULL);
+						show_irq_level, NULL);
 static SIW_TOUCH_ATTR(debug_tool,
-						_show_debug_tool_state,
-						_store_debug_tool_state);
+						show_debug_tool_state,
+						store_debug_tool_state);
 static SIW_TOUCH_ATTR(debug_tool_t,
-						_show_debug_tool_state,
-						_store_debug_tool_state);
+						show_debug_tool_state,
+						store_debug_tool_state);
 static SIW_TOUCH_ATTR(debug_option,
-						_show_debug_option_state,
-						_store_debug_option_state);
+						show_debug_option_state,
+						store_debug_option_state);
 #if defined(__SIW_SUPPORT_ASC)
 static SIW_TOUCH_ATTR(incoming_call,
 						_show_incoming_call_state,
@@ -1451,44 +1626,44 @@ static SIW_TOUCH_ATTR(onhand,
 						_store_onhand);
 #endif	/* __SIW_SUPPORT_ASC */
 static SIW_TOUCH_ATTR(module_info,
-						_show_module_info, NULL);
+						show_module_info, NULL);
 static SIW_TOUCH_ATTR(dbg_mask,
-						_show_dbg_mask,
-						_store_dbg_mask);
+						show_dbg_mask,
+						store_dbg_mask);
 static SIW_TOUCH_ATTR(dbg_flag,
-						_show_dbg_flag,
-						_store_dbg_flag);
+						show_dbg_flag,
+						store_dbg_flag);
 static SIW_TOUCH_ATTR(irq_flag,
-						_show_irq_flag,
-						_store_irq_flag);
+						show_irq_flag,
+						store_irq_flag);
 static SIW_TOUCH_ATTR(init_late, NULL,
-						_store_init_late);
+						store_init_late);
 static SIW_TOUCH_ATTR(dbg_notify, NULL,
-						_store_dbg_notify);
+						store_dbg_notify);
 static SIW_TOUCH_ATTR(dbg_mon,
-						_show_dbg_mon,
-						_store_dbg_mon);
+						show_dbg_mon,
+						store_dbg_mon);
 static SIW_TOUCH_ATTR(dbg_test, NULL,
-						_store_dbg_test);
+						store_dbg_test);
 static SIW_TOUCH_ATTR(glove_status,
-						_show_glove_state,
-						_store_glove_state);
+						show_glove_state,
+						store_glove_state);
 static SIW_TOUCH_ATTR(grab_status,
-						_show_grab_state,
-						_store_grab_state);
+						show_grab_state,
+						store_grab_state);
 static SIW_TOUCH_ATTR(sys_con,
 						show_sys_con,
 						store_sys_con);
 
 
 static struct attribute *siw_touch_attribute_list[] = {
-	&_SIW_TOUCH_ATTR_T(platform_data).attr,
-	&_SIW_TOUCH_ATTR_T(driver_data).attr,
-	&_SIW_TOUCH_ATTR_T(module_info).attr,
-	&_SIW_TOUCH_ATTR_T(dbg_mask).attr,
-	&_SIW_TOUCH_ATTR_T(dbg_flag).attr,
-	&_SIW_TOUCH_ATTR_T(init_late).attr,
-	&_SIW_TOUCH_ATTR_T(dbg_notify).attr,
+	&SIW_TOUCH_ATTR_T(platform_data).attr,
+	&SIW_TOUCH_ATTR_T(driver_data).attr,
+	&SIW_TOUCH_ATTR_T(module_info).attr,
+	&SIW_TOUCH_ATTR_T(dbg_mask).attr,
+	&SIW_TOUCH_ATTR_T(dbg_flag).attr,
+	&SIW_TOUCH_ATTR_T(init_late).attr,
+	&SIW_TOUCH_ATTR_T(dbg_notify).attr,
 	NULL,
 };
 
@@ -1497,42 +1672,42 @@ static const struct attribute_group siw_touch_attribute_group = {
 };
 
 static struct attribute *siw_touch_attribute_list_normal[] = {
-	&_SIW_TOUCH_ATTR_T(fw_upgrade).attr,
-	&_SIW_TOUCH_ATTR_T(fw_update).attr,
+	&SIW_TOUCH_ATTR_T(fw_upgrade).attr,
+	&SIW_TOUCH_ATTR_T(fw_update).attr,
 #if defined(__SIW_CONFIG_KNOCK)
-	&_SIW_TOUCH_ATTR_T(lpwg_data).attr,
-	&_SIW_TOUCH_ATTR_T(lpwg_notify).attr,
-	&_SIW_TOUCH_ATTR_T(mfts).attr,
-	&_SIW_TOUCH_ATTR_T(mfts_lpwg).attr,
+	&SIW_TOUCH_ATTR_T(lpwg_data).attr,
+	&SIW_TOUCH_ATTR_T(lpwg_notify).attr,
+	&SIW_TOUCH_ATTR_T(mfts).attr,
+	&SIW_TOUCH_ATTR_T(mfts_lpwg).attr,
 #endif	/* __SIW_CONFIG_KNOCK */
 #if defined(__SYS_USE_LOCKSCREEN)
-	&_SIW_TOUCH_ATTR_T(keyguard.attr),
+	&SIW_TOUCH_ATTR_T(keyguard.attr),
 #endif	/* __SYS_USE_LOCKSCREEN */
 #if defined(__SYS_USE_IME_STATE)
-	&_SIW_TOUCH_ATTR_T(ime_status).attr,
+	&SIW_TOUCH_ATTR_T(ime_status).attr,
 #endif	/* __SYS_USE_IME_STATE */
-	&_SIW_TOUCH_ATTR_T(quick_cover_status).attr,
-	&_SIW_TOUCH_ATTR_T(firmware).attr,
-	&_SIW_TOUCH_ATTR_T(version).attr,
-	&_SIW_TOUCH_ATTR_T(testmode_ver).attr,
-	&_SIW_TOUCH_ATTR_T(fw_version).attr,
-	&_SIW_TOUCH_ATTR_T(sp_link_touch_off).attr,
-	&_SIW_TOUCH_ATTR_T(irq_state).attr,
-	&_SIW_TOUCH_ATTR_T(irq_level).attr,
-	&_SIW_TOUCH_ATTR_T(irq_flag).attr,
-	&_SIW_TOUCH_ATTR_T(debug_tool).attr,
-	&_SIW_TOUCH_ATTR_T(debug_tool_t).attr,
-	&_SIW_TOUCH_ATTR_T(debug_option).attr,
+	&SIW_TOUCH_ATTR_T(quick_cover_status).attr,
+	&SIW_TOUCH_ATTR_T(firmware).attr,
+	&SIW_TOUCH_ATTR_T(version).attr,
+	&SIW_TOUCH_ATTR_T(testmode_ver).attr,
+	&SIW_TOUCH_ATTR_T(fw_version).attr,
+	&SIW_TOUCH_ATTR_T(sp_link_touch_off).attr,
+	&SIW_TOUCH_ATTR_T(irq_state).attr,
+	&SIW_TOUCH_ATTR_T(irq_level).attr,
+	&SIW_TOUCH_ATTR_T(irq_flag).attr,
+	&SIW_TOUCH_ATTR_T(debug_tool).attr,
+	&SIW_TOUCH_ATTR_T(debug_tool_t).attr,
+	&SIW_TOUCH_ATTR_T(debug_option).attr,
 #if defined(__SIW_SUPPORT_ASC)
-	&_SIW_TOUCH_ATTR_T(incoming_call).attr,
-	&_SIW_TOUCH_ATTR_T(asc).attr,
-	&_SIW_TOUCH_ATTR_T(onhand).attr,
+	&SIW_TOUCH_ATTR_T(incoming_call).attr,
+	&SIW_TOUCH_ATTR_T(asc).attr,
+	&SIW_TOUCH_ATTR_T(onhand).attr,
 #endif	/* __SIW_SUPPORT_ASC */
-	&_SIW_TOUCH_ATTR_T(dbg_mon).attr,
-	&_SIW_TOUCH_ATTR_T(dbg_test).attr,
-	&_SIW_TOUCH_ATTR_T(glove_status).attr,
-	&_SIW_TOUCH_ATTR_T(grab_status).attr,
-	&_SIW_TOUCH_ATTR_T(sys_con).attr,
+	&SIW_TOUCH_ATTR_T(dbg_mon).attr,
+	&SIW_TOUCH_ATTR_T(dbg_test).attr,
+	&SIW_TOUCH_ATTR_T(glove_status).attr,
+	&SIW_TOUCH_ATTR_T(grab_status).attr,
+	&SIW_TOUCH_ATTR_T(sys_con).attr,
 	NULL,
 };
 
@@ -1542,8 +1717,8 @@ static const struct attribute_group siw_touch_attribute_group_normal = {
 
 static struct attribute *siw_touch_attribute_list_charger[] = {
 #if defined(__SIW_CONFIG_KNOCK)
-	&_SIW_TOUCH_ATTR_T(mfts).attr,
-	&_SIW_TOUCH_ATTR_T(mfts_lpwg).attr,
+	&SIW_TOUCH_ATTR_T(mfts).attr,
+	&SIW_TOUCH_ATTR_T(mfts_lpwg).attr,
 #endif
 	NULL,
 };

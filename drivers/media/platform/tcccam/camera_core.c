@@ -67,8 +67,12 @@ static const int LVDS_SVM_111 = 6;
 static const int DVRS_RVM = 5;
 static const int ADAS_PRK = 7;
 
-//extern unsigned int do_hibernation;
-//extern unsigned int do_hibernate_boot;
+static int cam_err;
+
+#if defined(CONFIG_HIBERNATION)
+extern unsigned int do_hibernation;
+extern unsigned int do_hibernate_boot;
+#endif
 
 extern int tcc_ctrl_ext_frame(char enable);
 extern void tcc_ext_mutex(char lock, char bCamera);
@@ -112,6 +116,12 @@ int tcc_videobuf_s_caminfo(unsigned int *input, struct tcc_camera_device * vdev)
 
 	if (*input < 0)
 		return -EINVAL;
+
+	cam_err = 0;
+	vdev->cam_err.des_ic_err = 0;
+	vdev->cam_err.soc_dma_err = 0;
+	vdev->cam_err.des_signal_err = 0;
+	vdev->cam_err.des_lock_fail = 0;
 
 	vdev->CameraID = *input;
 
@@ -325,6 +335,7 @@ int tcc_videobuf_dqbuf(struct v4l2_buffer *buf, struct file *file )
 		
 		if(wait_event_interruptible_timeout(vdev->data.frame_wait, vdev->data.wakeup_int == 1, msecs_to_jiffies(500)) <= 0) 
 		{
+			vdev->cam_err.soc_dma_err = 1;
 			printk("wait_event_interruptible_timeout 500ms!!\n");
 			// 20131018 swhwang, for check video frame interrupt
 			if(vdev->check_int == 1)		vdev->check_int = 0; 
@@ -335,6 +346,7 @@ int tcc_videobuf_dqbuf(struct v4l2_buffer *buf, struct file *file )
 			printk("interruptible flag 0->1\n");
 			vdev->check_int = 1;
 		}
+		vdev->cam_err.soc_dma_err = 0;
 
 		/* Should probably recheck !list_empty() here */
 		if(list_empty(&(vdev->data.done_list)))
@@ -721,9 +733,56 @@ static long camera_core_do_ioctl(struct file * file, unsigned int cmd, void * ar
 		case VIDIOC_CHECK_CAMERA_MODULE:
 			return sensor_if_check_camera_module(vdev);
 
-		case VIDIOC_CHECK_CAMERA_SIGNAL_ERROR:	// Incoming Camera DATA Error
+		case VIDIOC_CHECK_CAMERA_ERROR:	// Incoming Camera DATA Error
 			//printk("%s cmd:VIDIOC_CHECK_CAMERA_SIGNAL_ERR\n",__func__);
-			*(int *)arg = sensor_if_check_camera_signal_error(vdev);
+
+			// Check i2c errors
+			if(vdev->cam_err.des_ic_err) {
+				*(unsigned int *)arg = DES_IC_COMMUNICATION_ERR;
+				if(cam_err != DES_IC_COMMUNICATION_ERR) {
+					printk("CAM_INFO: DES_IC ERROR\n");
+				}
+				cam_err = DES_IC_COMMUNICATION_ERR;
+				return retval;
+			}
+
+			// Check the link lock in the DES
+			if(vdev->cam_err.des_lock_fail) {
+				*(unsigned int *)arg = SERDES_LOCK_ERR;
+				if(cam_err != SERDES_LOCK_ERR) {
+					printk("CAM_INFO: SERDES LOCK ERROR\n");
+				}
+				cam_err = SERDES_LOCK_ERR;
+				return retval;
+			}
+
+
+			// Check the number of errors in the DES
+			if(vdev->cam_err.des_signal_err) {
+				*(unsigned int *)arg = SERDES_SIGNAL_ERR;
+				if(cam_err != SERDES_SIGNAL_ERR) {
+					printk("CAM_INFO: SERDES SIGNAL ERROR\n");
+				}
+				cam_err = SERDES_SIGNAL_ERR;
+				return retval;
+			}
+
+			// Check the DMA update on the SoC
+			if(vdev->cam_err.soc_dma_err) {
+				*(unsigned int *)arg = VIDEO_SIGNAL_ERR;
+				if(cam_err != VIDEO_SIGNAL_ERR) {
+					printk("CAM_INFO: VIDEO ERROR\n");
+				}
+				cam_err = VIDEO_SIGNAL_ERR;
+				return retval;
+			}
+
+			if(cam_err) {
+				printk("CAM_INFO: NO ERROR\n");
+				cam_err = 0;
+			}
+			*(unsigned int *)arg = 0;
+	
 			return retval;
 
 		case VIDIOC_USER_READ_SENSOR_REGISTER:
@@ -1019,7 +1078,7 @@ int camera_core_resume(struct platform_device * pdev) {
 		
 		// During snapshot booting, the context before making snapshot will be restored although whatever you do here.
 		// So, just stop EarlyCamera only if it's working.
-#if 0
+#if defined(CONFIG_HIBERNATION)
         if((do_hibernation == 1) && (do_hibernate_boot == 1)) {
 			// stop switching thread
 			tcc_cam_switchmanager_stop_monitor(vdev);
@@ -1044,7 +1103,7 @@ int camera_core_resume(struct platform_device * pdev) {
 	
 	// During snapshot booting, the context before making snapshot will be restored although whatever you do here.
 	// So, just stop EarlyCamera only if it's working.
-#if 0    
+#if defined(CONFIG_HIBERNATION) 
 	if((do_hibernation == 1) && (do_hibernate_boot == 1)) {
 
 		dprintk("vdev = 0x%x \n", vdev);

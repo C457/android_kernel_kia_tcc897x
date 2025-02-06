@@ -146,6 +146,8 @@ noisesuppression_t62_config = {0, };
 #if defined (MXT_CONFIG_RAW_FILE) || defined(MXT_CONFIG_XCFG_FILE)
 int mxt_set_config_file_641t(int object_id,int offset,int width,int data, int instance)
 {
+	if(offset < 0)
+		return -1;
 
         switch (object_id)
         {
@@ -333,9 +335,13 @@ int mxt_set_config_file_641t(int object_id,int offset,int width,int data, int in
                 //printk( "mxt_set_config_file Skip T%d\r\n",width);
                 return -1;
         }
+
+	return 0;
 }
 int mxt_set_config_file_641td(int object_id,int offset,int width,int data,int instance)
 {
+	if(offset < 0)
+		return -1;
 
         switch (object_id)
         {
@@ -628,6 +634,8 @@ int mxt_set_config_file_641td(int object_id,int offset,int width,int data,int in
                 //printk( "mxt_set_config_file Skip T%d:offset=%d:width=%d:data=%d\r\n",object_id,offset,width,data);
                 return -1;
         }
+
+	return 0;
 }
 #endif
 
@@ -1962,14 +1970,14 @@ int mxt_config_write_641T(struct mxt_data *mxt, u8 *mem, int which)
         {
                 for(i=0; i<=2; i++)
                 {
-                        memcpy(mem+obj_addr+i*obj_size, cfg_641T_T65[i], sizeof(cfg_641T_T65[0]));
+                        memcpy(mem+obj_addr+(i*obj_size), cfg_641T_T65[i], sizeof(cfg_641T_T65[0]));
                 }
         }
         else
         {
                 for(i=0; i<=2; i++)
                 {
-                        error = mxt_write_block(client, obj_addr+i*obj_size, obj_size, (u8 *)cfg_641T_T65[i]);
+                        error = mxt_write_block(client, obj_addr+(i*obj_size), obj_size, (u8 *)cfg_641T_T65[i]);
                         if (error < 0) {
                                 dev_err(&client->dev, "[TSP] mxt_write_block failed! "
                                                 "(%s, %d)\n", __func__, __LINE__);
@@ -2454,7 +2462,7 @@ int mxt_config_write_641TD(struct mxt_data *mxt, u8 *mem, int which)
 	{
 		for(i=0; i<=8; i++)
 		{
-			error = mxt_write_block(client, obj_addr+i*obj_size, obj_size, (u8 *)cfg_641TD_T110[i]);
+			error = mxt_write_block(client, obj_addr+(i*obj_size), obj_size, (u8 *)cfg_641TD_T110[i]);
 			if (error < 0) {
 				dev_err(&client->dev, "[TSP] mxt_write_block failed! "
 						"(%s, %d)\n", __func__, __LINE__);
@@ -2469,7 +2477,7 @@ int mxt_config_write_641TD(struct mxt_data *mxt, u8 *mem, int which)
 	{
 		for(i=0; i<=2; i++)
 		{
-			memcpy(mem+obj_addr+i*obj_size, cfg_641TD_T111[i], sizeof(cfg_641TD_T111[0]));
+			memcpy(mem+obj_addr+(i*obj_size), cfg_641TD_T111[i], sizeof(cfg_641TD_T111[0]));
 		}
 	}
 	else
@@ -2667,8 +2675,8 @@ recheck:
 		return -EINVAL;
 	}
 
-	if (status == WAITING_BOOTLOAD_COMMAND ||
-			status == FRAME_CRC_PASS) {
+	if ((status == WAITING_BOOTLOAD_COMMAND) ||
+			(status == FRAME_CRC_PASS)) {
 		int ret;
 		/* in this case, we should check CHG line */
 		/* I think that msleep(10) is enough, but keep the datasheet */
@@ -2757,9 +2765,23 @@ void mxt_change_i2c_addr(struct mxt_data *mxt, bool to_boot)
 				__func__, mxt->client->addr);
 		/* set the default mx336s address */
 		if (to_boot)
+		{
 			mxt->client->addr = to = 0x24;
+	                if(get_oemtype())
+			{
+	                        if((LCD_VER == DAUDIOKK_LCD_OD_08_00_1280_720_OGS_Si_BOE) || (LCD_VER == DAUDIOKK_LCD_OI_08_00_1280_720_OGS_Si_BOE))
+	                                mxt->client->addr = to = 0x25;
+			}
+		}
 		else
+		{
 			mxt->client->addr = to = 0x4A;
+			if(get_oemtype())
+                        {
+                                if((LCD_VER == DAUDIOKK_LCD_OD_08_00_1280_720_OGS_Si_BOE) || (LCD_VER == DAUDIOKK_LCD_OI_08_00_1280_720_OGS_Si_BOE))
+                                        mxt->client->addr = to = 0x4B;
+                        }
+		}
 	}
 	dev_info(&mxt->client->dev,
 			"[TSP] I2C address: 0x%02X --> 0x%02X\n", from, to);
@@ -2774,7 +2796,7 @@ int release_mxt_firmware(struct firmware *fw)
 {
     if(fw==NULL)
         return -EINVAL;
-    if(fw->size > 0 && fw->data)
+    if((fw->size > 0) && fw->data)
         kfree(fw->data);
     kfree(fw);
 
@@ -2797,7 +2819,7 @@ int mxt_read_firmware_fs(struct firmware *fw, const char *path, loff_t *pos)
     set_fs(get_ds());
     fd = filp_open(path, O_RDONLY, 0);
 
-    if (fd >= 0){
+    if ((fd != NULL) && (fd >= 0)){
         if(vfs_llseek(fd, *pos, SEEK_SET) != *pos){
             pr_err("[TSP] FW file seeking err (%s)\n", __func__); 
             goto out;
@@ -2807,7 +2829,7 @@ int mxt_read_firmware_fs(struct firmware *fw, const char *path, loff_t *pos)
             goto out;
         }
 		frame_size = (frame_bytes[0] << 8) | frame_bytes[1];
-        if(frame_size >= fw->size || frame_size <= 0){
+        if((frame_size >= fw->size) || (frame_size <= 0)){
             pr_err("[TSP] Touch firmware frame size err : %d\n", frame_size);
             goto out;
         }
@@ -2830,7 +2852,7 @@ int mxt_read_firmware_fs(struct firmware *fw, const char *path, loff_t *pos)
         pr_err("[TSP] Cannot open firmware file: %d\n", fd);
     }
 out:
-    if(fd>=0) 
+    if((fd != NULL) && (fd >= 0)) 
         filp_close(fd, NULL);
 
     set_fs(old_fs);
@@ -3043,7 +3065,7 @@ int mxt_load_registers(struct mxt_data *mxt, const char *buf, int size)
 		return ret;
 	}
 
-	version = mxt->device_info.major * 10 + mxt->device_info.minor;
+	version = (mxt->device_info.major * 10) + mxt->device_info.minor;
 	mxt_cfg.version = version;
 
 	ret = request_parse(&mxt->client->dev,
@@ -3055,7 +3077,7 @@ int mxt_load_registers(struct mxt_data *mxt, const char *buf, int size)
 
 		data = (u8 *)&mxt_cfg.config;
 
-		if (data && mxt_cfg.obj_info.object_num != 0) {
+		if (data && (mxt_cfg.obj_info.object_num != 0)) {
 			obj_addr = get_object_address(
 					mxt_cfg.obj_info.object_num,
 					mxt_cfg.obj_info.instance_num,

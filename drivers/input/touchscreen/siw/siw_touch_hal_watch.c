@@ -401,7 +401,7 @@ enum {
 		t_dev_dbg_watch(_dev, SIW_WATCH_TAG fmt, ##args)
 
 #define siw_watch_snprintf(_buf, _buf_max, _size, _fmt, _args...) \
-		__siw_snprintf(_buf, _buf_max, _size, _fmt, ##_args)
+		def_siw_snprintf(_buf, _buf_max, _size, _fmt, ##_args)
 
 
 #define TS_MODULE "[watch]"
@@ -2099,7 +2099,10 @@ static ssize_t store_ext_watch_rtc_onoff(struct device *dev,
 	ret = ext_watch_rtc_start(dev, value);
 	mutex_unlock(&ts->lock);
 
-	return count;
+	if(count < INT_MAX
+                return count;
+        else
+                return INT_MAX;
 }
 
 static ssize_t show_ext_watch_block_cfg(struct device *dev, char *buf)
@@ -2135,7 +2138,10 @@ static ssize_t store_ext_watch_block_cfg(struct device *dev,
 	t_watch_info(dev, "%s\n", (value) ? "BLOCKED" : "UNBLOCKED");
 
 out:
-	return count;
+	if(count < INT_MAX)
+                return count;
+        else
+                return INT_MAX;
 }
 
 static ssize_t store_ext_watch_font_onoff(struct device *dev,
@@ -2290,7 +2296,10 @@ static ssize_t store_ext_watch_config_font_effect(struct device *dev,
 		break;
 	}
 
-	return count;
+	if(count < INT_MAX)
+                return count;
+        else
+                return INT_MAX;
 }
 
 static int __ext_watch_chk_font_pos(struct device *dev,
@@ -2550,7 +2559,10 @@ out:
 	/* Transfer LUT data via notifier */
 	siw_touch_blocking_notifier_call(LCD_EVENT_TOUCH_WATCH_LUT_UPDATE, (void*)(&cfg));
 
-	return count;
+	if(count < INT_MAX)
+                return count;
+        else
+                return INT_MAX;
 }
 
 
@@ -2786,7 +2798,7 @@ static ssize_t store_ext_watch_ctrl(struct device *dev,
 	int ret = 0;
 
 	if (sscanf(buf, "%5s %X", command, &value) <= 0) {
-		return count;
+		return -EINVAL;
 	}
 
 	if (!strcmp(command, "p")) {
@@ -2801,7 +2813,10 @@ static ssize_t store_ext_watch_ctrl(struct device *dev,
 			msecs_to_jiffies(20));
 	}
 
-	return count;
+	if(count < INT_MAX)
+                return count;
+        else
+                return INT_MAX;
 }
 
 
@@ -2966,7 +2981,10 @@ static ssize_t ext_watch_access_write(struct file *filp, struct kobject *kobj,
 
 	if (atomic_read(&chip->block_watch_cfg) == BLOCKED) {
 		t_watch_warn(dev, "access_write: blocked\n");
-		return count;
+		if(count < INT_MAX)
+	                return count;
+	        else
+	                return INT_MAX;
 	}
 
 	if (buf == NULL) {

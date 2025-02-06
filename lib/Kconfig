@@ -513,6 +513,6 @@ source "lib/fonts/Kconfig"
 #
 
 config ARCH_HAS_SG_CHAIN
-	def_bool n
+	def_bool y
 
 endmenu

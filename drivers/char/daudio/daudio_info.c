@@ -663,7 +663,7 @@ static ssize_t daudio_info_read(struct file *file, char *buf, size_t count, loff
 //	printk(KERN_INFO "GPS(0)/RTC(1) DET adc : %ld mv\n", get_ant_diag_adc(6));
 //	printk(KERN_INFO "GPS(0)/RTC(1) DET : %d\n", get_gps_rtc_det()); 
 #if defined(CONFIG_DAUDIO_ECO) || defined(CONFIG_DAUDIO_KK)
-	#if defined(CONFIG_TDMB)
+	#if defined(INCLUDE_TDMB)
 	printk(KERN_INFO "GPS/DMB ANT adc: %ld mv\n", get_ant_diag_adc(2));
 	#else
 	printk(KERN_INFO "GPS ANT adc: %ld mv\n", get_ant_diag_adc(2));
